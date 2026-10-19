@@ -29,8 +29,9 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT || 4000;
-  await app.listen(port);
-  logger.log(`Apartment Management Backend is running on: http://localhost:${port}/api`);
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
+  // Listen on 0.0.0.0 for containerized / cloud hosting like Render
+  await app.listen(port, '0.0.0.0');
+  logger.log(`Apartment Management Backend is running on port ${port} (/api)`);
 }
 bootstrap();
