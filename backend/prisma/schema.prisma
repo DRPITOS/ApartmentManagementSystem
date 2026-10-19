@@ -1,0 +1,110 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Owner {
+  id          String           @id @default(uuid())
+  email       String           @unique
+  password    String
+  name        String
+  phoneNumber String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  apartments  ApartmentOwner[]
+
+  @@map("owners")
+}
+
+model Apartment {
+  id                     String           @id @default(uuid())
+  name                   String
+  nickname               String?
+  address                String?
+  defaultElectricityRate Float            @default(7.0) // บาทต่อหน่วย
+  defaultWaterRate       Float            @default(18.0) // บาทต่อหน่วย
+  waterBillingType       String           @default("PER_UNIT") // PER_UNIT หรือ FLAT_RATE
+  flatWaterRate          Float?           @default(100.0) // บาทต่อเดือนกรณีเหมาจ่าย
+  commonFee              Float?           @default(0.0) // ค่าส่วนกลาง
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  owners                 ApartmentOwner[]
+  rooms                  Room[]
+
+  @@map("apartments")
+}
+
+model ApartmentOwner {
+  id          String    @id @default(uuid())
+  apartmentId String
+  ownerId     String
+  role        String    @default("PRIMARY_OWNER") // PRIMARY_OWNER หรือ CO_OWNER
+  createdAt   DateTime  @default(now())
+  apartment   Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  owner       Owner     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([apartmentId, ownerId])
+  @@map("apartment_owners")
+}
+
+model Room {
+  id                   String          @id @default(uuid())
+  apartmentId          String
+  roomNumber           String
+  floor                Int?            @default(1)
+  basePrice            Float           // ราคาค่าเช่าห้องต่อเดือน (แต่ละห้องต่างกันได้)
+  customElectricityRate Float?         // หากระบุจะใช้อัตรานี้แทนอัตราส่วนกลางของหอพัก
+  customWaterRate      Float?          // หากระบุจะใช้อัตรานี้แทนอัตราส่วนกลางของหอพัก
+  tenantName           String?
+  tenantPhone          String?
+  status               String          @default("OCCUPIED") // OCCUPIED, VACANT, MAINTENANCE
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  apartment            Apartment       @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  meterReadings        MeterReading[]
+
+  @@unique([apartmentId, roomNumber])
+  @@map("rooms")
+}
+
+model MeterReading {
+  id                   String    @id @default(uuid())
+  roomId               String
+  billingMonth         String    // e.g. "2026-10"
+  readingDate          DateTime  @default(now())
+  
+  // มิเตอร์ไฟฟ้า
+  previousElectricity  Float
+  currentElectricity   Float
+  electricityUnits     Float
+  electricityRate      Float
+  electricityCost      Float
+
+  // มิเตอร์น้ำ
+  previousWater        Float
+  currentWater         Float
+  waterUnits           Float
+  waterRate            Float
+  waterCost            Float
+
+  // ค่าเช่าและค่าใช้จ่ายอื่น
+  baseRentPrice        Float     // ค่าเช่าห้องตามรอบบิลนี้
+  otherFees            Float     @default(0.0)
+  otherFeesNote        String?
+  totalAmount          Float     // รวมยอดทั้งสิ้น
+
+  status               String    @default("UNPAID") // UNPAID, PAID, CANCELLED
+  paidAt               DateTime?
+  note                 String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  room                 Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, billingMonth])
+  @@map("meter_readings")
+}
