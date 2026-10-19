@@ -25,6 +25,8 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
     waterBillingType: 'PER_UNIT' as 'PER_UNIT' | 'FLAT_RATE',
     flatWaterRate: '100',
     commonFee: '0',
+    defaultInitialElectricity: '0',
+    defaultInitialWater: '0',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,6 +55,8 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
       waterBillingType: formData.waterBillingType,
       flatWaterRate: formData.waterBillingType === 'FLAT_RATE' ? Number(formData.flatWaterRate) : undefined,
       commonFee: Number(formData.commonFee || 0),
+      defaultInitialElectricity: formData.defaultInitialElectricity !== '' ? Number(formData.defaultInitialElectricity) : 0,
+      defaultInitialWater: formData.defaultInitialWater !== '' ? Number(formData.defaultInitialWater) : 0,
     };
 
     const validationResult = apartmentSchema.safeParse(parsedData);
@@ -82,6 +86,8 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
         waterBillingType: 'PER_UNIT',
         flatWaterRate: '100',
         commonFee: '0',
+        defaultInitialElectricity: '0',
+        defaultInitialWater: '0',
       });
     } catch (err: any) {
       setServerError(
@@ -132,6 +138,7 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
           error={errors.address}
         />
 
+        {/* Pricing Configuration */}
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
           <h4 className="font-bold text-slate-900 text-lg">
             ⚙️ กำหนดราคาค่าน้ำ - ค่าไฟฟ้า (สามารถแก้ไขได้ตลอดเวลา)
@@ -212,6 +219,51 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
           </div>
         </div>
 
+        {/* Initial Meter Reading Baseline */}
+        <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🔢</span>
+            <div>
+              <h4 className="font-bold text-amber-950 text-base sm:text-lg">
+                เลขมิเตอร์เริ่มต้น (สำหรับห้องพักที่สร้างใหม่ในหอนี้)
+              </h4>
+              <p className="text-xs sm:text-sm text-amber-800">
+                ระบบจะใช้เลขนี้เป็นเลขตั้งต้นตอนสร้างห้องพัก (สามารถปรับเปลี่ยนรายห้องได้ในภายหลัง)
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <Input
+              label="⚡ เลขมิเตอร์ไฟเริ่มต้น (ค่าตั้งต้น)"
+              name="defaultInitialElectricity"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="0.0"
+              value={formData.defaultInitialElectricity}
+              onChange={handleChange}
+              error={errors.defaultInitialElectricity}
+              unitSuffix="หน่วย"
+              helperText="เลขมิเตอร์ไฟครั้งล่าสุด"
+            />
+
+            <Input
+              label="💧 เลขมิเตอร์น้ำเริ่มต้น (ค่าตั้งต้น)"
+              name="defaultInitialWater"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="0.0"
+              value={formData.defaultInitialWater}
+              onChange={handleChange}
+              error={errors.defaultInitialWater}
+              unitSuffix="หน่วย"
+              helperText="เลขมิเตอร์น้ำครั้งล่าสุด"
+            />
+          </div>
+        </div>
+
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
           <button
             type="button"
@@ -223,9 +275,9 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 text-base shadow-sm transition-colors disabled:opacity-50"
+            className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base shadow-lg shadow-indigo-200 transition-all disabled:opacity-50"
           >
-            {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกหอพัก'}
+            {isSubmitting ? 'กำลังสร้างหอพัก...' : 'บันทึกสร้างหอพัก'}
           </button>
         </div>
       </form>

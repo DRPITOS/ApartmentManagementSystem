@@ -70,6 +70,11 @@ export class RoomService {
       throw new ConflictException(`ห้องหมายเลข ${dto.roomNumber} มีอยู่ในหอพักนี้แล้ว`);
     }
 
+    const apt = await this.prisma.apartment.findUnique({
+      where: { id: dto.apartmentId },
+      select: { defaultInitialElectricity: true, defaultInitialWater: true },
+    });
+
     const room = await this.prisma.room.create({
       data: {
         apartmentId: dto.apartmentId,
@@ -78,6 +83,8 @@ export class RoomService {
         basePrice: dto.basePrice,
         customElectricityRate: dto.customElectricityRate ?? null,
         customWaterRate: dto.customWaterRate ?? null,
+        initialElectricity: dto.initialElectricity ?? apt?.defaultInitialElectricity ?? 0,
+        initialWater: dto.initialWater ?? apt?.defaultInitialWater ?? 0,
         tenantName: dto.tenantName?.trim() || null,
         tenantPhone: dto.tenantPhone?.trim() || null,
         status: dto.status || 'OCCUPIED',
@@ -90,6 +97,13 @@ export class RoomService {
 
   async batchCreate(dto: BatchCreateRoomsDto, ownerId: string) {
     await this.apartmentService.validateOwnership(dto.apartmentId, ownerId);
+
+    const apt = await this.prisma.apartment.findUnique({
+      where: { id: dto.apartmentId },
+      select: { defaultInitialElectricity: true, defaultInitialWater: true },
+    });
+    const defaultElec = apt?.defaultInitialElectricity ?? 0;
+    const defaultWater = apt?.defaultInitialWater ?? 0;
 
     const results = [];
     for (const r of dto.rooms) {
@@ -109,6 +123,8 @@ export class RoomService {
             roomNumber: r.roomNumber.trim(),
             floor: r.floor ?? 1,
             basePrice: r.basePrice,
+            initialElectricity: r.initialElectricity ?? defaultElec,
+            initialWater: r.initialWater ?? defaultWater,
             status: 'OCCUPIED',
           },
         });
@@ -158,6 +174,8 @@ export class RoomService {
         ...(dto.basePrice !== undefined && { basePrice: dto.basePrice }),
         ...(dto.customElectricityRate !== undefined && { customElectricityRate: dto.customElectricityRate }),
         ...(dto.customWaterRate !== undefined && { customWaterRate: dto.customWaterRate }),
+        ...(dto.initialElectricity !== undefined && { initialElectricity: dto.initialElectricity }),
+        ...(dto.initialWater !== undefined && { initialWater: dto.initialWater }),
         ...(dto.tenantName !== undefined && { tenantName: dto.tenantName ? dto.tenantName.trim() : null }),
         ...(dto.tenantPhone !== undefined && { tenantPhone: dto.tenantPhone ? dto.tenantPhone.trim() : null }),
         ...(dto.status !== undefined && { status: dto.status }),

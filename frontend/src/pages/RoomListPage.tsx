@@ -38,6 +38,8 @@ export const RoomListPage: React.FC = () => {
     basePrice: '3500',
     customElectricityRate: '',
     customWaterRate: '',
+    initialElectricity: '0',
+    initialWater: '0',
     tenantName: '',
     tenantPhone: '',
     status: 'OCCUPIED' as 'OCCUPIED' | 'VACANT' | 'MAINTENANCE',
@@ -52,6 +54,8 @@ export const RoomListPage: React.FC = () => {
     floorEnd: '3',
     roomsPerFloor: '5',
     basePrice: '3500',
+    initialElectricity: '0',
+    initialWater: '0',
   });
 
   const fetchRooms = async () => {
@@ -73,12 +77,25 @@ export const RoomListPage: React.FC = () => {
 
   const handleOpenAddModal = () => {
     setEditingRoom(null);
+    const defaultElec =
+      selectedApartment?.defaultInitialElectricity !== undefined &&
+      selectedApartment?.defaultInitialElectricity !== null
+        ? String(selectedApartment.defaultInitialElectricity)
+        : '0';
+    const defaultWater =
+      selectedApartment?.defaultInitialWater !== undefined &&
+      selectedApartment?.defaultInitialWater !== null
+        ? String(selectedApartment.defaultInitialWater)
+        : '0';
+
     setRoomForm({
       roomNumber: '',
       floor: '1',
       basePrice: '3500',
       customElectricityRate: '',
       customWaterRate: '',
+      initialElectricity: defaultElec,
+      initialWater: defaultWater,
       tenantName: '',
       tenantPhone: '',
       status: 'OCCUPIED',
@@ -86,6 +103,29 @@ export const RoomListPage: React.FC = () => {
     setFormErrors({});
     setServerError(null);
     setIsAddModalOpen(true);
+  };
+
+  const handleOpenBatchModal = () => {
+    const defaultElec =
+      selectedApartment?.defaultInitialElectricity !== undefined &&
+      selectedApartment?.defaultInitialElectricity !== null
+        ? String(selectedApartment.defaultInitialElectricity)
+        : '0';
+    const defaultWater =
+      selectedApartment?.defaultInitialWater !== undefined &&
+      selectedApartment?.defaultInitialWater !== null
+        ? String(selectedApartment.defaultInitialWater)
+        : '0';
+
+    setBatchForm({
+      floorStart: '1',
+      floorEnd: '3',
+      roomsPerFloor: '5',
+      basePrice: '3500',
+      initialElectricity: defaultElec,
+      initialWater: defaultWater,
+    });
+    setIsBatchModalOpen(true);
   };
 
   const handleOpenEditModal = (room: Room) => {
@@ -96,6 +136,8 @@ export const RoomListPage: React.FC = () => {
       basePrice: String(room.basePrice),
       customElectricityRate: room.customElectricityRate ? String(room.customElectricityRate) : '',
       customWaterRate: room.customWaterRate ? String(room.customWaterRate) : '',
+      initialElectricity: String(room.initialElectricity ?? 0),
+      initialWater: String(room.initialWater ?? 0),
       tenantName: room.tenantName || '',
       tenantPhone: room.tenantPhone || '',
       status: room.status,
@@ -118,6 +160,8 @@ export const RoomListPage: React.FC = () => {
       basePrice: Number(roomForm.basePrice),
       customElectricityRate: roomForm.customElectricityRate ? Number(roomForm.customElectricityRate) : undefined,
       customWaterRate: roomForm.customWaterRate ? Number(roomForm.customWaterRate) : undefined,
+      initialElectricity: roomForm.initialElectricity ? Number(roomForm.initialElectricity) : 0,
+      initialWater: roomForm.initialWater ? Number(roomForm.initialWater) : 0,
       tenantName: roomForm.tenantName.trim() || undefined,
       tenantPhone: roomForm.tenantPhone.trim() || undefined,
       status: roomForm.status,
@@ -170,8 +214,10 @@ export const RoomListPage: React.FC = () => {
     const fEnd = parseInt(batchForm.floorEnd);
     const count = parseInt(batchForm.roomsPerFloor);
     const price = parseFloat(batchForm.basePrice);
+    const initElec = parseFloat(batchForm.initialElectricity || '0');
+    const initWater = parseFloat(batchForm.initialWater || '0');
 
-    if (isNaN(fStart) || isNaN(fEnd) || isNaN(count) || isNaN(price)) {
+    if (isNaN(fStart) || isNaN(fEnd) || isNaN(count) || isNaN(price) || isNaN(initElec) || isNaN(initWater)) {
       alert('กรุณากรอกตัวเลขให้ถูกต้อง');
       return;
     }
@@ -184,6 +230,8 @@ export const RoomListPage: React.FC = () => {
           roomNumber,
           floor: f,
           basePrice: price,
+          initialElectricity: initElec,
+          initialWater: initWater,
         });
       }
     }
@@ -238,13 +286,13 @@ export const RoomListPage: React.FC = () => {
           </div>
           <p className="text-base text-slate-600 mt-1">
             หอพัก: <strong>{selectedApartment.name}</strong>
-            {selectedApartment.nickname ? ` (${selectedApartment.nickname})` : ''} — กำหนดราคาค่าเช่าแต่ละห้องได้อิสระ
+            {selectedApartment.nickname ? ` (${selectedApartment.nickname})` : ''} — กำหนดราคาค่าเช่าและเลขมิเตอร์ตั้งต้นแต่ละห้องได้อิสระ
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <button
-            onClick={() => setIsBatchModalOpen(true)}
+            onClick={handleOpenBatchModal}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base transition-colors"
           >
             <Layers className="w-5 h-5 text-indigo-600" />
@@ -338,6 +386,14 @@ export const RoomListPage: React.FC = () => {
                       <strong className="text-xl font-black text-indigo-700">
                         ฿{room.basePrice.toLocaleString('th-TH')}
                       </strong>
+                    </div>
+
+                    {/* Initial recorded meter numbers */}
+                    <div className="flex items-center justify-between text-sm text-slate-500 pt-1 border-t border-slate-200/60">
+                      <span>เลขมิเตอร์ตั้งต้น:</span>
+                      <span className="font-semibold text-slate-700">
+                        ⚡ {room.initialElectricity ?? 0} | 💧 {room.initialWater ?? 0}
+                      </span>
                     </div>
 
                     {room.customElectricityRate && (
@@ -456,6 +512,40 @@ export const RoomListPage: React.FC = () => {
             helperText="แต่ละห้องสามารถกำหนดราคาต่างกันได้"
             required
           />
+
+          {/* Initial Meter Readings Setup */}
+          <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-xl space-y-3">
+            <h5 className="font-bold text-slate-900 text-base flex items-center gap-1.5">
+              <span>🔢 เลขมิเตอร์ตั้งต้นล่าสุด (เมื่อเริ่มใช้งาน/รับห้อง)</span>
+            </h5>
+            <p className="text-xs text-slate-500">
+              ระบบจะใช้เลขนี้เป็นเลขครั้งก่อนหน้าอัตโนมัติ สำหรับคำนวณการใช้งานในรอบบิลแรก
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="เลขมิเตอร์ไฟเริ่มต้น"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="0"
+                value={roomForm.initialElectricity}
+                onChange={(e) => setRoomForm((p) => ({ ...p, initialElectricity: e.target.value }))}
+                error={formErrors.initialElectricity}
+                unitSuffix="หน่วย"
+              />
+              <Input
+                label="เลขมิเตอร์น้ำเริ่มต้น"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="0"
+                value={roomForm.initialWater}
+                onChange={(e) => setRoomForm((p) => ({ ...p, initialWater: e.target.value }))}
+                error={formErrors.initialWater}
+                unitSuffix="หน่วย"
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <Input
@@ -588,6 +678,32 @@ export const RoomListPage: React.FC = () => {
             unitSuffix="บาท/เดือน"
             required
           />
+
+          <div className="p-3.5 bg-amber-50/60 border border-amber-200 rounded-xl space-y-2">
+            <span className="text-sm font-bold text-slate-800 block">
+              🔢 เลขมิเตอร์เริ่มต้นสำหรับทุกห้องในชุดนี้:
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="มิเตอร์ไฟตั้งต้น"
+                type="number"
+                step="0.1"
+                min="0"
+                value={batchForm.initialElectricity}
+                onChange={(e) => setBatchForm((p) => ({ ...p, initialElectricity: e.target.value }))}
+                unitSuffix="หน่วย"
+              />
+              <Input
+                label="มิเตอร์น้ำตั้งต้น"
+                type="number"
+                step="0.1"
+                min="0"
+                value={batchForm.initialWater}
+                onChange={(e) => setBatchForm((p) => ({ ...p, initialWater: e.target.value }))}
+                unitSuffix="หน่วย"
+              />
+            </div>
+          </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
             <button

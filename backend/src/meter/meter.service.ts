@@ -28,17 +28,41 @@ export class MeterService {
 
     await this.apartmentService.validateOwnership(room.apartmentId, ownerId);
 
-    if (dto.currentElectricity < dto.previousElectricity) {
-      throw new BadRequestException('เลขมิเตอร์ไฟปัจจุบันต้องไม่น้อยกว่าเลขครั้งก่อน');
+    // If previousElectricity is not provided, fetch the latest reading or room initial unit
+    let previousElectricity = dto.previousElectricity;
+    if (previousElectricity === undefined || previousElectricity === null) {
+      const lastReading = await this.prisma.meterReading.findFirst({
+        where: { roomId: dto.roomId, billingMonth: { lt: dto.billingMonth } },
+        orderBy: { billingMonth: 'desc' },
+      });
+      previousElectricity = lastReading ? lastReading.currentElectricity : (room.initialElectricity ?? 0);
     }
 
-    if (dto.currentWater < dto.previousWater) {
-      throw new BadRequestException('เลขมิเตอร์น้ำปัจจุบันต้องไม่น้อยกว่าเลขครั้งก่อน');
+    // If previousWater is not provided, fetch the latest reading or room initial unit
+    let previousWater = dto.previousWater;
+    if (previousWater === undefined || previousWater === null) {
+      const lastReading = await this.prisma.meterReading.findFirst({
+        where: { roomId: dto.roomId, billingMonth: { lt: dto.billingMonth } },
+        orderBy: { billingMonth: 'desc' },
+      });
+      previousWater = lastReading ? lastReading.currentWater : (room.initialWater ?? 0);
+    }
+
+    if (dto.currentElectricity < previousElectricity) {
+      throw new BadRequestException(
+        `เลขมิเตอร์ไฟปัจจุบัน (${dto.currentElectricity}) ต้องไม่น้อยกว่าเลขครั้งก่อน (${previousElectricity})`,
+      );
+    }
+
+    if (dto.currentWater < previousWater) {
+      throw new BadRequestException(
+        `เลขมิเตอร์น้ำปัจจุบัน (${dto.currentWater}) ต้องไม่น้อยกว่าเลขครั้งก่อน (${previousWater})`,
+      );
     }
 
     // คำนวณหน่วยที่ใช้
-    const electricityUnits = Math.round((dto.currentElectricity - dto.previousElectricity) * 100) / 100;
-    const waterUnits = Math.round((dto.currentWater - dto.previousWater) * 100) / 100;
+    const electricityUnits = Math.round((dto.currentElectricity - previousElectricity) * 100) / 100;
+    const waterUnits = Math.round((dto.currentWater - previousWater) * 100) / 100;
 
     // อัตราค่าไฟ
     const electricityRate =
@@ -83,12 +107,12 @@ export class MeterService {
         where: { id: existing.id },
         data: {
           readingDate: dto.readingDate ? new Date(dto.readingDate) : new Date(),
-          previousElectricity: dto.previousElectricity,
+          previousElectricity,
           currentElectricity: dto.currentElectricity,
           electricityUnits,
           electricityRate,
           electricityCost,
-          previousWater: dto.previousWater,
+          previousWater,
           currentWater: dto.currentWater,
           waterUnits,
           waterRate,
@@ -108,12 +132,12 @@ export class MeterService {
         roomId: dto.roomId,
         billingMonth: dto.billingMonth,
         readingDate: dto.readingDate ? new Date(dto.readingDate) : new Date(),
-        previousElectricity: dto.previousElectricity,
+        previousElectricity,
         currentElectricity: dto.currentElectricity,
         electricityUnits,
         electricityRate,
         electricityCost,
-        previousWater: dto.previousWater,
+        previousWater,
         currentWater: dto.currentWater,
         waterUnits,
         waterRate,
@@ -164,13 +188,27 @@ export class MeterService {
       orderBy: [{ floor: 'asc' }, { roomNumber: 'asc' }],
       include: {
         meterReadings: {
-          where: { billingMonth },
+          orderBy: { billingMonth: 'desc' },
         },
       },
     });
 
     const readings = rooms.map((room) => {
-      const reading = room.meterReadings[0] || null;
+      // Current selected month reading (if already recorded)
+      const currentMonthReading = room.meterReadings.find((m) => m.billingMonth === billingMonth) || null;
+
+      // Find last recorded reading before the current month
+      const pastReading = room.meterReadings.find((m) => m.billingMonth < billingMonth);
+
+      // Determine baseline previous values: either from previous month or room initial meter setting
+      const baselineElectricity = pastReading
+        ? pastReading.currentElectricity
+        : (room.initialElectricity ?? 0);
+
+      const baselineWater = pastReading
+        ? pastReading.currentWater
+        : (room.initialWater ?? 0);
+
       return {
         room: {
           id: room.id,
@@ -180,8 +218,14 @@ export class MeterService {
           tenantName: room.tenantName,
           tenantPhone: room.tenantPhone,
           status: room.status,
+          initialElectricity: room.initialElectricity ?? 0,
+          initialWater: room.initialWater ?? 0,
+          customElectricityRate: room.customElectricityRate,
+          customWaterRate: room.customWaterRate,
+          baselineElectricity,
+          baselineWater,
         },
-        reading,
+        reading: currentMonthReading,
       };
     });
 
@@ -373,8 +417,26 @@ export class MeterService {
 
       if (!room || room.apartmentId !== dto.apartmentId) continue;
 
-      const electricityUnits = Math.max(0, Math.round((item.currentElectricity - item.previousElectricity) * 100) / 100);
-      const waterUnits = Math.max(0, Math.round((item.currentWater - item.previousWater) * 100) / 100);
+      let previousElectricity = item.previousElectricity;
+      if (previousElectricity === undefined || previousElectricity === null) {
+        const lastReading = await this.prisma.meterReading.findFirst({
+          where: { roomId: item.roomId, billingMonth: { lt: dto.billingMonth } },
+          orderBy: { billingMonth: 'desc' },
+        });
+        previousElectricity = lastReading ? lastReading.currentElectricity : (room.initialElectricity ?? 0);
+      }
+
+      let previousWater = item.previousWater;
+      if (previousWater === undefined || previousWater === null) {
+        const lastReading = await this.prisma.meterReading.findFirst({
+          where: { roomId: item.roomId, billingMonth: { lt: dto.billingMonth } },
+          orderBy: { billingMonth: 'desc' },
+        });
+        previousWater = lastReading ? lastReading.currentWater : (room.initialWater ?? 0);
+      }
+
+      const electricityUnits = Math.max(0, Math.round((item.currentElectricity - previousElectricity) * 100) / 100);
+      const waterUnits = Math.max(0, Math.round((item.currentWater - previousWater) * 100) / 100);
 
       const electricityRate = room.customElectricityRate ?? apartment.defaultElectricityRate ?? 7.0;
       const waterRate = room.customWaterRate ?? apartment.defaultWaterRate ?? 18.0;
@@ -402,12 +464,12 @@ export class MeterService {
         const updated = await this.prisma.meterReading.update({
           where: { id: existing.id },
           data: {
-            previousElectricity: item.previousElectricity,
+            previousElectricity,
             currentElectricity: item.currentElectricity,
             electricityUnits,
             electricityRate,
             electricityCost,
-            previousWater: item.previousWater,
+            previousWater,
             currentWater: item.currentWater,
             waterUnits,
             waterRate,
@@ -424,12 +486,12 @@ export class MeterService {
           data: {
             roomId: item.roomId,
             billingMonth: dto.billingMonth,
-            previousElectricity: item.previousElectricity,
+            previousElectricity,
             currentElectricity: item.currentElectricity,
             electricityUnits,
             electricityRate,
             electricityCost,
-            previousWater: item.previousWater,
+            previousWater,
             currentWater: item.currentWater,
             waterUnits,
             waterRate,

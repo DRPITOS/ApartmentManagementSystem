@@ -47,6 +47,8 @@ export const ApartmentListPage: React.FC = () => {
     waterBillingType: 'PER_UNIT' as 'PER_UNIT' | 'FLAT_RATE',
     flatWaterRate: '',
     commonFee: '',
+    defaultInitialElectricity: '0',
+    defaultInitialWater: '0',
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,6 +64,8 @@ export const ApartmentListPage: React.FC = () => {
       waterBillingType: apt.waterBillingType,
       flatWaterRate: apt.flatWaterRate ? String(apt.flatWaterRate) : '100',
       commonFee: apt.commonFee ? String(apt.commonFee) : '0',
+      defaultInitialElectricity: String(apt.defaultInitialElectricity ?? 0),
+      defaultInitialWater: String(apt.defaultInitialWater ?? 0),
     });
     setEditErrors({});
     setIsEditModalOpen(true);
@@ -85,6 +89,12 @@ export const ApartmentListPage: React.FC = () => {
       if (flatErr) errors.flatWaterRate = flatErr;
     }
 
+    const initElecErr = validateNumberSyntax(editForm.defaultInitialElectricity, 'เลขมิเตอร์ไฟเริ่มต้น', true);
+    if (initElecErr) errors.defaultInitialElectricity = initElecErr;
+
+    const initWaterErr = validateNumberSyntax(editForm.defaultInitialWater, 'เลขมิเตอร์น้ำเริ่มต้น', true);
+    if (initWaterErr) errors.defaultInitialWater = initWaterErr;
+
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       return;
@@ -101,6 +111,8 @@ export const ApartmentListPage: React.FC = () => {
         waterBillingType: editForm.waterBillingType,
         flatWaterRate: Number(editForm.flatWaterRate),
         commonFee: Number(editForm.commonFee || 0),
+        defaultInitialElectricity: Number(editForm.defaultInitialElectricity || 0),
+        defaultInitialWater: Number(editForm.defaultInitialWater || 0),
       };
 
       const res = await api.put(`/apartments/${editingApartment.id}`, payload);
@@ -119,7 +131,7 @@ export const ApartmentListPage: React.FC = () => {
   const handleDeleteApartment = async (apt: Apartment) => {
     if (
       !confirm(
-        `คุณต้องการลบหอพัก "${apt.name}" หรือไม่?\nคำเตือน: ข้อมูลห้องพักและมิเตอร์ทั้งหมดของหอพักนี้จะถูกลบถาวร`,
+        `คุณต้องการลบหอพัก "${apt.name}" หรือไม่?\n\nคำเตือน: ข้อมูลห้องพัก มิเตอร์ และประวัติทั้งหมดจะถูกลบถาวร`,
       )
     ) {
       return;
@@ -133,19 +145,18 @@ export const ApartmentListPage: React.FC = () => {
     }
   };
 
-  // Co-owner management
+  // Co-owners logic
   const handleOpenCoOwners = async (apt: Apartment) => {
     setCoOwnerApt(apt);
     setCoOwnerEmail('');
     setCoOwnerError(null);
     setCoOwnerSuccess(null);
     setIsCoOwnerModalOpen(true);
-
     try {
       const res = await api.get(`/apartments/${apt.id}`);
       setCoOwnerList(res.data.owners || []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch co-owners:', err);
     }
   };
 
@@ -166,75 +177,70 @@ export const ApartmentListPage: React.FC = () => {
         email: coOwnerEmail.trim(),
         role: 'CO_OWNER',
       });
-      setCoOwnerSuccess(res.data.message || 'เพิ่มเจ้าของร่วมเรียบร้อยแล้ว');
+      setCoOwnerSuccess(res.data.message || 'เพิ่มเจ้าของร่วมสำเร็จ');
       setCoOwnerEmail('');
-      // Refresh co-owner list
+      // Refresh co-owners list
       const aptRes = await api.get(`/apartments/${coOwnerApt.id}`);
       setCoOwnerList(aptRes.data.owners || []);
-      await fetchApartments();
+      fetchApartments();
     } catch (err: any) {
-      setCoOwnerError(err.response?.data?.message || 'เกิดข้อผิดพลาดในการเพิ่มเจ้าของร่วม');
+      setCoOwnerError(err.response?.data?.message || 'ไม่สามารถเพิ่มเจ้าของร่วมได้');
     }
   };
 
   const handleRemoveCoOwner = async (targetOwnerId: string, ownerName: string) => {
     if (!coOwnerApt) return;
-    if (!confirm(`คุณต้องการนำ "${ownerName}" ออกจากการเป็นเจ้าของร่วมหรือไม่?`)) return;
+    if (!confirm(`ต้องการนำ "${ownerName}" ออกจากการเป็นเจ้าของร่วมหรือไม่?`)) return;
 
     try {
       await api.delete(`/apartments/${coOwnerApt.id}/owners/${targetOwnerId}`);
-      // Refresh
+      // Refresh list
       const aptRes = await api.get(`/apartments/${coOwnerApt.id}`);
       setCoOwnerList(aptRes.data.owners || []);
-      await fetchApartments();
+      fetchApartments();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'เกิดข้อผิดพลาดในการนำเจ้าของร่วมออก');
+      alert(err.response?.data?.message || 'ไม่สามารถนำเจ้าของร่วมออกได้');
     }
   };
 
-  if (isLoading && apartments.length === 0) {
+  if (isLoading) {
     return <ApartmentListSkeleton />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              หอพัก & อัตราค่าน้ำค่าไฟ
-            </h2>
-            <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-base font-bold">
-              {apartments.length} โครงการ
-            </span>
-          </div>
-          <p className="text-base text-slate-600 mt-1">
-            จัดการหอพัก กำหนดชื่อเล่น กำหนดราคาค่าไฟ-ค่าน้ำต่อหน่วย และบริหารจัดการเจ้าของร่วม (Co-owners)
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            จัดการหอพักและอพาร์ตเมนต์
+          </h1>
+          <p className="text-base sm:text-lg text-slate-500 mt-1">
+            คุณสามารถเป็นเจ้าของได้หลายหอพัก และมีเจ้าของร่วมช่วยดูแลได้
           </p>
         </div>
 
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base sm:text-lg shadow-md shadow-indigo-100 transition-all w-full sm:w-auto"
+          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-2xl shadow-lg shadow-indigo-100 text-base sm:text-lg transition-all self-stretch sm:self-auto"
         >
           <Plus className="w-5 h-5" />
-          <span>เพิ่มโครงการหอพักใหม่</span>
+          <span>เพิ่มหอพักใหม่</span>
         </button>
       </div>
 
-      {/* Apartment Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Apartment Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {apartments.map((apt) => {
           const isSelected = selectedApartment?.id === apt.id;
 
           return (
             <div
               key={apt.id}
-              className={`bg-white rounded-3xl p-5 sm:p-7 border-2 transition-all flex flex-col justify-between ${
+              className={`rounded-3xl p-5 sm:p-6 transition-all border flex flex-col justify-between ${
                 isSelected
-                  ? 'border-indigo-600 shadow-lg shadow-indigo-50 ring-4 ring-indigo-50'
-                  : 'border-slate-200 shadow-xs hover:border-slate-300'
+                  ? 'bg-white border-indigo-400 shadow-xl shadow-indigo-50/50 ring-2 ring-indigo-500/20'
+                  : 'bg-white border-slate-200/80 hover:border-indigo-200 shadow-sm'
               }`}
             >
               <div>
@@ -314,6 +320,16 @@ export const ApartmentListPage: React.FC = () => {
                     <span className="text-xs text-indigo-900 block font-medium">
                       (มีผู้เช่า {apt.occupiedRooms || 0} ห้อง)
                     </span>
+                  </div>
+                </div>
+
+                {/* Initial meter baseline info */}
+                <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-slate-600">
+                  <span className="font-medium text-slate-700">มิเตอร์เริ่มต้นตั้งต้น:</span>
+                  <div className="flex items-center gap-3 font-bold text-slate-800">
+                    <span className="text-amber-700">⚡ ไฟ {apt.defaultInitialElectricity ?? 0}</span>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-sky-700">💧 น้ำ {apt.defaultInitialWater ?? 0}</span>
                   </div>
                 </div>
 
@@ -463,6 +479,49 @@ export const ApartmentListPage: React.FC = () => {
                 value={editForm.commonFee}
                 onChange={(e) => setEditForm((p) => ({ ...p, commonFee: e.target.value }))}
                 unitSuffix="บาท/เดือน"
+              />
+            </div>
+          </div>
+
+          {/* Initial Meter Baseline Section */}
+          <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🔢</span>
+              <div>
+                <h4 className="font-bold text-amber-950 text-base sm:text-lg">
+                  เลขมิเตอร์เริ่มต้น (สำหรับห้องพักที่สร้างใหม่ในหอนี้)
+                </h4>
+                <p className="text-xs sm:text-sm text-amber-800">
+                  ค่าตั้งต้นสำหรับนำไปใส่ให้อัตโนมัติเวลาเพิ่มห้องพักใหม่
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <Input
+                label="⚡ เลขมิเตอร์ไฟเริ่มต้น (ค่าตั้งต้น)"
+                type="number"
+                step="0.1"
+                min="0"
+                value={editForm.defaultInitialElectricity}
+                onChange={(e) =>
+                  setEditForm((p) => ({ ...p, defaultInitialElectricity: e.target.value }))
+                }
+                error={editErrors.defaultInitialElectricity}
+                unitSuffix="หน่วย"
+              />
+
+              <Input
+                label="💧 เลขมิเตอร์น้ำเริ่มต้น (ค่าตั้งต้น)"
+                type="number"
+                step="0.1"
+                min="0"
+                value={editForm.defaultInitialWater}
+                onChange={(e) =>
+                  setEditForm((p) => ({ ...p, defaultInitialWater: e.target.value }))
+                }
+                error={editErrors.defaultInitialWater}
+                unitSuffix="หน่วย"
               />
             </div>
           </div>

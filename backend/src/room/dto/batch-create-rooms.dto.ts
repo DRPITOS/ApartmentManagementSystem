@@ -15,6 +15,18 @@ export class SingleBatchRoomItem {
   @IsNumber({}, { message: 'ราคาค่าเช่าห้องต้องเป็นตัวเลข' })
   @Min(0, { message: 'ราคาค่าเช่าห้องต้องไม่ติดลบ' })
   basePrice!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องเป็นตัวเลข' })
+  @Min(0, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ' })
+  initialElectricity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'เลขมิเตอร์น้ำเริ่มต้นต้องเป็นตัวเลข' })
+  @Min(0, { message: 'เลขมิเตอร์น้ำเริ่มต้นต้องไม่ติดลบ' })
+  initialWater?: number;
 }
 
 export class BatchCreateRoomsDto {

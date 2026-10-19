@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useApartment } from '../contexts/ApartmentContext.js';
 import api from '../services/api.js';
-import type { Room, MeterReading } from '../types/index.js';
+import type { MeterReading } from '../types/index.js';
 import { MeterReadingSkeleton } from '../components/Skeleton.js';
 
 interface RoomReadingState {
@@ -60,11 +60,7 @@ export const MeterReadingPage: React.FC = () => {
     setGlobalMessage(null);
 
     try {
-      // 1. Get apartment rooms
-      const roomsRes = await api.get(`/rooms/apartment/${selectedApartment.id}`);
-      const rooms: Room[] = roomsRes.data;
-
-      // 2. Get current month readings
+      // Get current month report with baseline data computed by server
       const monthlyRes = await api.get(
         `/meters/apartment/${selectedApartment.id}?month=${selectedMonth}`,
       );
@@ -72,8 +68,9 @@ export const MeterReadingPage: React.FC = () => {
 
       const states: RoomReadingState[] = [];
 
-      for (const r of rooms) {
-        const existingReading = monthlyItems.find((item) => item.room.id === r.id)?.reading;
+      for (const item of monthlyItems) {
+        const r = item.room;
+        const existingReading = item.reading;
 
         const electricityRate =
           r.customElectricityRate ?? selectedApartment.defaultElectricityRate ?? 7.0;
@@ -82,6 +79,10 @@ export const MeterReadingPage: React.FC = () => {
         const waterBillingType = selectedApartment.waterBillingType || 'PER_UNIT';
         const flatWaterRate = selectedApartment.flatWaterRate ?? 100;
         const commonFee = selectedApartment.commonFee ?? 0;
+
+        // Baseline numbers from previous record or room initial meter setting
+        const baselineElec = String(r.baselineElectricity ?? r.initialElectricity ?? 0);
+        const baselineWater = String(r.baselineWater ?? r.initialWater ?? 0);
 
         if (existingReading) {
           states.push({
@@ -104,25 +105,17 @@ export const MeterReadingPage: React.FC = () => {
             lastReadingId: existingReading.id,
           });
         } else {
-          // If not recorded this month, try to pre-fill previousElectricity & previousWater from latest recorded reading!
-          let prevElec = '0';
-          let prevWater = '0';
-          if (r.meterReadings && r.meterReadings.length > 0) {
-            prevElec = String(r.meterReadings[0].currentElectricity);
-            prevWater = String(r.meterReadings[0].currentWater);
-          }
-
           states.push({
             roomId: r.id,
             roomNumber: r.roomNumber,
             floor: r.floor ?? 1,
             basePrice: r.basePrice,
             tenantName: r.tenantName ?? null,
-            previousElectricity: prevElec,
-            currentElectricity: prevElec,
+            previousElectricity: baselineElec,
+            currentElectricity: '', // Let user put only the new number!
             electricityRate,
-            previousWater: prevWater,
-            currentWater: prevWater,
+            previousWater: baselineWater,
+            currentWater: '', // Let user put only the new number!
             waterRate,
             waterBillingType,
             flatWaterRate,
@@ -154,7 +147,7 @@ export const MeterReadingPage: React.FC = () => {
 
   const handleInputChange = (
     roomId: string,
-    field: 'previousElectricity' | 'currentElectricity' | 'previousWater' | 'currentWater' | 'basePrice',
+    field: 'currentElectricity' | 'currentWater' | 'basePrice',
     value: string,
   ) => {
     setRoomStates((prev) =>
@@ -173,13 +166,15 @@ export const MeterReadingPage: React.FC = () => {
   // Calculation helpers
   const calculateRoom = (state: RoomReadingState) => {
     const prevE = parseFloat(state.previousElectricity) || 0;
-    const currE = parseFloat(state.currentElectricity) || 0;
-    const eUnits = Math.max(0, Math.round((currE - prevE) * 100) / 100);
+    const currE = parseFloat(state.currentElectricity);
+    const hasCurrE = !isNaN(currE);
+    const eUnits = hasCurrE && currE >= prevE ? Math.round((currE - prevE) * 100) / 100 : 0;
     const eCost = Math.round(eUnits * state.electricityRate * 100) / 100;
 
     const prevW = parseFloat(state.previousWater) || 0;
-    const currW = parseFloat(state.currentWater) || 0;
-    const wUnits = Math.max(0, Math.round((currW - prevW) * 100) / 100);
+    const currW = parseFloat(state.currentWater);
+    const hasCurrW = !isNaN(currW);
+    const wUnits = hasCurrW && currW >= prevW ? Math.round((currW - prevW) * 100) / 100 : 0;
 
     let wCost = 0;
     if (state.waterBillingType === 'FLAT_RATE') {
@@ -192,7 +187,7 @@ export const MeterReadingPage: React.FC = () => {
     const commonFee = state.commonFee || 0;
     const total = Math.round((basePrice + eCost + wCost + commonFee) * 100) / 100;
 
-    return { eUnits, eCost, wUnits, wCost, basePrice, commonFee, total };
+    return { eUnits, eCost, wUnits, wCost, basePrice, commonFee, total, hasCurrE, hasCurrW };
   };
 
   // Single room save
@@ -201,35 +196,27 @@ export const MeterReadingPage: React.FC = () => {
     if (!state) return;
 
     // Syntax validation
-    const prevE = parseFloat(state.previousElectricity);
+    const prevE = parseFloat(state.previousElectricity) || 0;
     const currE = parseFloat(state.currentElectricity);
-    const prevW = parseFloat(state.previousWater);
+    const prevW = parseFloat(state.previousWater) || 0;
     const currW = parseFloat(state.currentWater);
     const baseP = parseFloat(String(state.basePrice));
 
-    if (isNaN(prevE) || prevE < 0) {
-      setRoomError(roomId, 'เลขมิเตอร์ไฟครั้งก่อนไม่ถูกต้อง');
-      return;
-    }
     if (isNaN(currE) || currE < 0) {
-      setRoomError(roomId, 'เลขมิเตอร์ไฟปัจจุบันไม่ถูกต้อง');
+      setRoomError(roomId, 'กรุณากรอกเลขมิเตอร์ไฟใหม่ให้ถูกต้อง');
       return;
     }
     if (currE < prevE) {
-      setRoomError(roomId, 'เลขมิเตอร์ไฟปัจจุบันต้องไม่น้อยกว่าครั้งก่อน');
+      setRoomError(roomId, `เลขมิเตอร์ไฟใหม่ (${currE}) ต้องไม่น้อยกว่าเลขครั้งก่อน (${prevE})`);
       return;
     }
 
-    if (isNaN(prevW) || prevW < 0) {
-      setRoomError(roomId, 'เลขมิเตอร์น้ำครั้งก่อนไม่ถูกต้อง');
-      return;
-    }
     if (isNaN(currW) || currW < 0) {
-      setRoomError(roomId, 'เลขมิเตอร์น้ำปัจจุบันไม่ถูกต้อง');
+      setRoomError(roomId, 'กรุณากรอกเลขมิเตอร์น้ำใหม่ให้ถูกต้อง');
       return;
     }
     if (currW < prevW) {
-      setRoomError(roomId, 'เลขมิเตอร์น้ำปัจจุบันต้องไม่น้อยกว่าครั้งก่อน');
+      setRoomError(roomId, `เลขมิเตอร์น้ำใหม่ (${currW}) ต้องไม่น้อยกว่าเลขครั้งก่อน (${prevW})`);
       return;
     }
 
@@ -287,23 +274,35 @@ export const MeterReadingPage: React.FC = () => {
   const handleSaveAll = async () => {
     if (!selectedApartment) return;
 
+    // Validate that rooms have inputs
+    const unenteredRooms = roomStates.filter(
+      (r) => r.currentElectricity.trim() === '' || r.currentWater.trim() === '',
+    );
+    if (unenteredRooms.length > 0) {
+      setGlobalMessage({
+        type: 'error',
+        text: `กรุณากรอกเลขมิเตอร์ใหม่ให้ครบทุกห้อง (ห้องที่ยังไม่ได้กรอก: ${unenteredRooms.map((r) => r.roomNumber).join(', ')})`,
+      });
+      return;
+    }
+
     // Validate all rooms
     for (const r of roomStates) {
-      const prevE = parseFloat(r.previousElectricity);
+      const prevE = parseFloat(r.previousElectricity) || 0;
       const currE = parseFloat(r.currentElectricity);
-      const prevW = parseFloat(r.previousWater);
+      const prevW = parseFloat(r.previousWater) || 0;
       const currW = parseFloat(r.currentWater);
       if (currE < prevE) {
         setGlobalMessage({
           type: 'error',
-          text: `ห้อง ${r.roomNumber}: เลขมิเตอร์ไฟปัจจุบันต้องไม่น้อยกว่าครั้งก่อน`,
+          text: `ห้อง ${r.roomNumber}: เลขมิเตอร์ไฟใหม่ (${currE}) ต้องไม่น้อยกว่าเลขครั้งก่อน (${prevE})`,
         });
         return;
       }
       if (currW < prevW) {
         setGlobalMessage({
           type: 'error',
-          text: `ห้อง ${r.roomNumber}: เลขมิเตอร์น้ำปัจจุบันต้องไม่น้อยกว่าครั้งก่อน`,
+          text: `ห้อง ${r.roomNumber}: เลขมิเตอร์น้ำใหม่ (${currW}) ต้องไม่น้อยกว่าเลขครั้งก่อน (${prevW})`,
         });
         return;
       }
@@ -368,7 +367,7 @@ export const MeterReadingPage: React.FC = () => {
           </div>
           <p className="text-base text-slate-600 mt-1">
             หอพัก: <strong className="text-slate-900">{selectedApartment.name}</strong>
-            {selectedApartment.nickname ? ` (${selectedApartment.nickname})` : ''}
+            {selectedApartment.nickname ? ` (${selectedApartment.nickname})` : ''} — กรอกเฉพาะเลขมิเตอร์ใหม่ ระบบจะดึงเลขครั้งก่อนมาคำนวณให้อัตโนมัติ
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-2 text-sm sm:text-base text-slate-600">
             <span>⚡ อัตราไฟ: <strong>{selectedApartment.defaultElectricityRate} บ./หน่วย</strong></span>
@@ -422,12 +421,12 @@ export const MeterReadingPage: React.FC = () => {
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 text-base flex items-start gap-3">
         <Zap className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
         <div>
-          <strong className="block text-lg font-bold">เคล็ดลับการเดินจดมิเตอร์บนมือถือ:</strong>
-          ระบบจะคำนวณจำนวนหน่วยและยอดเงินให้อัตโนมัติทันทีที่กรอก สามารถกดปุ่ม "บันทึกห้องนี้" เพื่อบันทึกข้อมูลรายห้องได้ทันทีโดยไม่ต้องรอจดครบทุกห้อง
+          <strong className="block text-lg font-bold">✨ สะดวกขึ้น: กรอกเฉพาะ "เลขมิเตอร์ใหม่" ของเดือนนี้!</strong>
+          ระบบจะดึงเลขครั้งก่อนหน้าจากฐานข้อมูล (หรือเลขตั้งต้นตอนเพิ่มห้องพัก) มาเปรียบเทียบและคำนวณจำนวนหน่วยและยอดเงินให้อัตโนมัติทันที
         </div>
       </div>
 
-      {/* Room Meter Cards / Mobile Vertical List & Desktop Grid */}
+      {/* Room Meter Cards */}
       {roomStates.length > 0 ? (
         <div className="space-y-4">
           {roomStates.map((state) => {
@@ -522,35 +521,33 @@ export const MeterReadingPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 items-end">
+                      {/* Previous number from database (Read-only reference) */}
                       <div>
-                        <label className="block text-sm sm:text-base font-semibold text-slate-700 mb-1">
-                          เลขครั้งก่อน
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          value={state.previousElectricity}
-                          onChange={(e) =>
-                            handleInputChange(state.roomId, 'previousElectricity', e.target.value)
-                          }
-                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                        />
+                        <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                          เลขครั้งก่อน (ในระบบ)
+                        </span>
+                        <div className="bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-600 flex items-center justify-between">
+                          <span>{state.previousElectricity}</span>
+                          <span className="text-xs text-slate-600">หน่วย</span>
+                        </div>
                       </div>
+
+                      {/* Current number input */}
                       <div>
-                        <label className="block text-sm sm:text-base font-semibold text-slate-700 mb-1">
-                          เลขปัจจุบัน <span className="text-rose-500">*</span>
+                        <label className="block text-sm sm:text-base font-semibold text-slate-900 mb-1">
+                          เลขจดใหม่ <span className="text-rose-500">*</span>
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          min="0"
+                          min={state.previousElectricity}
+                          placeholder={`≥ ${state.previousElectricity}`}
                           value={state.currentElectricity}
                           onChange={(e) =>
                             handleInputChange(state.roomId, 'currentElectricity', e.target.value)
                           }
-                          className="w-full bg-white border-2 border-amber-400 rounded-xl px-3 py-2.5 text-lg sm:text-xl font-extrabold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                          className="w-full bg-white border-2 border-amber-400 rounded-xl px-3 py-2 text-lg sm:text-xl font-extrabold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-400"
                         />
                       </div>
                     </div>
@@ -580,35 +577,33 @@ export const MeterReadingPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 items-end">
+                      {/* Previous number from database (Read-only reference) */}
                       <div>
-                        <label className="block text-sm sm:text-base font-semibold text-slate-700 mb-1">
-                          เลขครั้งก่อน
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          value={state.previousWater}
-                          onChange={(e) =>
-                            handleInputChange(state.roomId, 'previousWater', e.target.value)
-                          }
-                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                        />
+                        <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                          เลขครั้งก่อน (ในระบบ)
+                        </span>
+                        <div className="bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-600 flex items-center justify-between">
+                          <span>{state.previousWater}</span>
+                          <span className="text-xs text-slate-600">หน่วย</span>
+                        </div>
                       </div>
+
+                      {/* Current number input */}
                       <div>
-                        <label className="block text-sm sm:text-base font-semibold text-slate-700 mb-1">
-                          เลขปัจจุบัน <span className="text-rose-500">*</span>
+                        <label className="block text-sm sm:text-base font-semibold text-slate-900 mb-1">
+                          เลขจดใหม่ <span className="text-rose-500">*</span>
                         </label>
                         <input
                           type="number"
                           step="0.1"
-                          min="0"
+                          min={state.previousWater}
+                          placeholder={`≥ ${state.previousWater}`}
                           value={state.currentWater}
                           onChange={(e) =>
                             handleInputChange(state.roomId, 'currentWater', e.target.value)
                           }
-                          className="w-full bg-white border-2 border-sky-400 rounded-xl px-3 py-2.5 text-lg sm:text-xl font-extrabold text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                          className="w-full bg-white border-2 border-sky-400 rounded-xl px-3 py-2 text-lg sm:text-xl font-extrabold text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-400"
                         />
                       </div>
                     </div>
@@ -616,7 +611,13 @@ export const MeterReadingPage: React.FC = () => {
                     {/* Calculated units & cost */}
                     <div className="mt-3 pt-3 border-t border-sky-200/80 flex items-center justify-between text-base">
                       <span className="font-medium text-sky-900">
-                        ใช้ไป: <strong className="text-lg font-bold text-sky-700">{wUnits}</strong> หน่วย
+                        {state.waterBillingType === 'FLAT_RATE' ? (
+                          <span>เหมาจ่ายรายเดือน</span>
+                        ) : (
+                          <>
+                            ใช้ไป: <strong className="text-lg font-bold text-sky-700">{wUnits}</strong> หน่วย
+                          </>
+                        )}
                       </span>
                       <span className="font-extrabold text-sky-900 text-lg">
                         = ฿{wCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })}

@@ -16,6 +16,8 @@ export interface Apartment {
   waterBillingType: 'PER_UNIT' | 'FLAT_RATE';
   flatWaterRate?: number | null;
   commonFee?: number | null;
+  defaultInitialElectricity?: number | null;
+  defaultInitialWater?: number | null;
   role?: string;
   totalRooms?: number;
   occupiedRooms?: number;
@@ -40,6 +42,8 @@ export interface Room {
   basePrice: number; // ค่าเช่าห้องฐาน
   customElectricityRate?: number | null;
   customWaterRate?: number | null;
+  initialElectricity?: number | null;
+  initialWater?: number | null;
   tenantName?: string | null;
   tenantPhone?: string | null;
   status: 'OCCUPIED' | 'VACANT' | 'MAINTENANCE';
@@ -93,6 +97,12 @@ export interface ApartmentMonthlyReport {
       tenantName?: string | null;
       tenantPhone?: string | null;
       status: string;
+      initialElectricity?: number;
+      initialWater?: number;
+      customElectricityRate?: number | null;
+      customWaterRate?: number | null;
+      baselineElectricity?: number;
+      baselineWater?: number;
     };
     reading: MeterReading | null;
   }[];

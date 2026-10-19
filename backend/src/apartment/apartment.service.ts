@@ -65,6 +65,8 @@ export class ApartmentService {
         waterBillingType: apt.waterBillingType,
         flatWaterRate: apt.flatWaterRate,
         commonFee: apt.commonFee,
+        defaultInitialElectricity: apt.defaultInitialElectricity ?? 0,
+        defaultInitialWater: apt.defaultInitialWater ?? 0,
         createdAt: apt.createdAt,
         updatedAt: apt.updatedAt,
         role: m.role,
@@ -135,6 +137,8 @@ export class ApartmentService {
         waterBillingType: dto.waterBillingType || 'PER_UNIT',
         flatWaterRate: dto.flatWaterRate ?? 100,
         commonFee: dto.commonFee ?? 0,
+        defaultInitialElectricity: dto.defaultInitialElectricity ?? 0,
+        defaultInitialWater: dto.defaultInitialWater ?? 0,
         owners: {
           create: {
             ownerId,
@@ -165,6 +169,8 @@ export class ApartmentService {
         ...(dto.waterBillingType !== undefined && { waterBillingType: dto.waterBillingType }),
         ...(dto.flatWaterRate !== undefined && { flatWaterRate: dto.flatWaterRate }),
         ...(dto.commonFee !== undefined && { commonFee: dto.commonFee }),
+        ...(dto.defaultInitialElectricity !== undefined && { defaultInitialElectricity: dto.defaultInitialElectricity }),
+        ...(dto.defaultInitialWater !== undefined && { defaultInitialWater: dto.defaultInitialWater }),
       },
     });
 

@@ -39,4 +39,16 @@ export class CreateApartmentDto {
   @IsNumber({}, { message: 'ค่าส่วนกลางต้องเป็นตัวเลข (Common fee must be a number)' })
   @Min(0, { message: 'ค่าส่วนกลางต้องไม่ติดลบ (Common fee cannot be negative)' })
   commonFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องเป็นตัวเลข (Default initial electricity must be a number)' })
+  @Min(0, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ (Default initial electricity cannot be negative)' })
+  defaultInitialElectricity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'เลขมิเตอร์น้ำเริ่มต้นต้องเป็นตัวเลข (Default initial water must be a number)' })
+  @Min(0, { message: 'เลขมิเตอร์น้ำเริ่มต้นต้องไม่ติดลบ (Default initial water cannot be negative)' })
+  defaultInitialWater?: number;
 }

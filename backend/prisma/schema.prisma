@@ -31,6 +31,8 @@ model Apartment {
   waterBillingType       String           @default("PER_UNIT") // PER_UNIT หรือ FLAT_RATE
   flatWaterRate          Float?           @default(100.0) // บาทต่อเดือนกรณีเหมาจ่าย
   commonFee              Float?           @default(0.0) // ค่าส่วนกลาง
+  defaultInitialElectricity Float?         @default(0.0) // เลขมิเตอร์ไฟเริ่มต้นของห้องพักในหอนี้
+  defaultInitialWater       Float?         @default(0.0) // เลขมิเตอร์น้ำเริ่มต้นของห้องพักในหอนี้
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
   owners                 ApartmentOwner[]
@@ -60,6 +62,8 @@ model Room {
   basePrice            Float           // ราคาค่าเช่าห้องต่อเดือน (แต่ละห้องต่างกันได้)
   customElectricityRate Float?         // หากระบุจะใช้อัตรานี้แทนอัตราส่วนกลางของหอพัก
   customWaterRate      Float?          // หากระบุจะใช้อัตรานี้แทนอัตราส่วนกลางของหอพัก
+  initialElectricity   Float?          @default(0.0) // เลขมิเตอร์ไฟเริ่มต้นของห้อง
+  initialWater         Float?          @default(0.0) // เลขมิเตอร์น้ำเริ่มต้นของห้อง
   tenantName           String?
   tenantPhone          String?
   status               String          @default("OCCUPIED") // OCCUPIED, VACANT, MAINTENANCE

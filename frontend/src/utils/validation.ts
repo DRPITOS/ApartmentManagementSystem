@@ -52,6 +52,14 @@ export const apartmentSchema = z.object({
     .number({ message: 'ค่าส่วนกลางต้องเป็นตัวเลข' })
     .min(0, 'ค่าส่วนกลางต้องไม่ติดลบ')
     .optional(),
+  defaultInitialElectricity: z
+    .number({ message: 'เลขมิเตอร์ไฟเริ่มต้นต้องเป็นตัวเลข' })
+    .min(0, 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ')
+    .optional(),
+  defaultInitialWater: z
+    .number({ message: 'เลขมิเตอร์น้ำเริ่มต้นต้องเป็นตัวเลข' })
+    .min(0, 'เลขมิเตอร์น้ำเริ่มต้นต้องไม่ติดลบ')
+    .optional(),
 });
 
 export const roomSchema = z.object({
@@ -71,6 +79,14 @@ export const roomSchema = z.object({
     .min(0, 'ราคาค่าน้ำต้องไม่ติดลบ')
     .nullable()
     .optional(),
+  initialElectricity: z
+    .number()
+    .min(0, 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ')
+    .optional(),
+  initialWater: z
+    .number()
+    .min(0, 'เลขมิเตอร์น้ำเริ่มต้นต้องไม่ติดลบ')
+    .optional(),
   tenantName: z.string().optional(),
   tenantPhone: z.string().optional(),
   status: z.enum(['OCCUPIED', 'VACANT', 'MAINTENANCE']),
@@ -79,17 +95,17 @@ export const roomSchema = z.object({
 export const meterReadingSchema = z.object({
   roomId: z.string().min(1, 'กรุณาระบุห้องพัก'),
   billingMonth: z.string().regex(/^\d{4}-\d{2}$/, 'รูปแบบรอบบิลต้องเป็น ปปปป-ดด (เช่น 2026-10)'),
-  previousElectricity: z.number().min(0, 'เลขมิเตอร์ไฟครั้งก่อนต้องไม่ติดลบ'),
+  previousElectricity: z.number().min(0, 'เลขมิเตอร์ไฟครั้งก่อนต้องไม่ติดลบ').optional(),
   currentElectricity: z.number().min(0, 'เลขมิเตอร์ไฟปัจจุบันต้องไม่ติดลบ'),
-  previousWater: z.number().min(0, 'เลขมิเตอร์น้ำครั้งก่อนต้องไม่ติดลบ'),
+  previousWater: z.number().min(0, 'เลขมิเตอร์น้ำครั้งก่อนต้องไม่ติดลบ').optional(),
   currentWater: z.number().min(0, 'เลขมิเตอร์น้ำปัจจุบันต้องไม่ติดลบ'),
   baseRentPrice: z.number().min(0, 'ค่าเช่าห้องต้องไม่ติดลบ').optional(),
   otherFees: z.number().min(0, 'ค่าใช้จ่ายอื่นต้องไม่ติดลบ').optional(),
   otherFeesNote: z.string().optional(),
-}).refine((data) => data.currentElectricity >= data.previousElectricity, {
+}).refine((data) => data.previousElectricity === undefined || data.currentElectricity >= data.previousElectricity, {
   message: 'เลขมิเตอร์ไฟปัจจุบันต้องไม่น้อยกว่าครั้งก่อน',
   path: ['currentElectricity'],
-}).refine((data) => data.currentWater >= data.previousWater, {
+}).refine((data) => data.previousWater === undefined || data.currentWater >= data.previousWater, {
   message: 'เลขมิเตอร์น้ำปัจจุบันต้องไม่น้อยกว่าครั้งก่อน',
   path: ['currentWater'],
 });

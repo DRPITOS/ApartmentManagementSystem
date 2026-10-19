@@ -30,6 +30,18 @@ export class UpdateRoomDto {
   customWaterRate?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องเป็นตัวเลข' })
+  @Min(0, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ' })
+  initialElectricity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'เลขมิเตอร์น้ำเริ่มต้นต้องเป็นตัวเลข' })
+  @Min(0, { message: 'เลขมิเตอร์น้ำเริ่มต้นต้องไม่ติดลบ' })
+  initialWater?: number;
+
+  @IsOptional()
   @IsString({ message: 'ชื่อผู้เช่าต้องเป็นข้อความ' })
   tenantName?: string;
 
