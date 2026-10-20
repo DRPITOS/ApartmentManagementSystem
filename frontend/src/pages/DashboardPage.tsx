@@ -57,8 +57,11 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const handleOpenBill = (reading: MeterReading) => {
-    setActiveBillReading(reading);
+  const handleOpenBill = (reading: MeterReading, room?: any) => {
+    setActiveBillReading({
+      ...reading,
+      room: room || reading.room,
+    });
     setIsBillModalOpen(true);
   };
 
@@ -351,7 +354,7 @@ export const DashboardPage: React.FC = () => {
                       <td className="py-4 px-5 text-center">
                         {isRecorded ? (
                           <button
-                            onClick={() => handleOpenBill(reading)}
+                            onClick={() => handleOpenBill(reading, room)}
                             className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-bold text-base transition-colors"
                           >
                             <Printer className="w-4 h-4" />

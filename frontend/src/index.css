@@ -42,3 +42,54 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Print optimization */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm;
+  }
+
+  /* When printing a bill modal, completely hide #root so the background dashboard does not print */
+  body:has(#printable-bill) #root,
+  body.printing-bill #root {
+    display: none !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Hide interactive buttons or anything flagged no-print */
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* Ensure printable bill is full width and cleanly laid out */
+  #printable-bill {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Prevent page breaks inside bill components */
+  #printable-bill table,
+  #printable-bill tr,
+  #printable-bill td,
+  #printable-bill th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

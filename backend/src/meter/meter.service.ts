@@ -209,23 +209,32 @@ export class MeterService {
         ? pastReading.currentWater
         : (room.initialWater ?? 0);
 
+      const roomData = {
+        id: room.id,
+        roomNumber: room.roomNumber,
+        floor: room.floor,
+        basePrice: room.basePrice,
+        tenantName: room.tenantName,
+        tenantPhone: room.tenantPhone,
+        status: room.status,
+        initialElectricity: room.initialElectricity ?? 0,
+        initialWater: room.initialWater ?? 0,
+        customElectricityRate: room.customElectricityRate,
+        customWaterRate: room.customWaterRate,
+        baselineElectricity,
+        baselineWater,
+      };
+
+      const readingWithRoom = currentMonthReading
+        ? {
+            ...currentMonthReading,
+            room: roomData,
+          }
+        : null;
+
       return {
-        room: {
-          id: room.id,
-          roomNumber: room.roomNumber,
-          floor: room.floor,
-          basePrice: room.basePrice,
-          tenantName: room.tenantName,
-          tenantPhone: room.tenantPhone,
-          status: room.status,
-          initialElectricity: room.initialElectricity ?? 0,
-          initialWater: room.initialWater ?? 0,
-          customElectricityRate: room.customElectricityRate,
-          customWaterRate: room.customWaterRate,
-          baselineElectricity,
-          baselineWater,
-        },
-        reading: currentMonthReading,
+        room: roomData,
+        reading: readingWithRoom,
       };
     });
 
