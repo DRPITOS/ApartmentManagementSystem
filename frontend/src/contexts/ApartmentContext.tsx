@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api.js';
-import type { Apartment } from '../types/index.js';
+import type { Apartment } from '../types';
 import { useAuth } from './AuthContext.js';
 
 interface ApartmentContextType {
@@ -42,6 +42,15 @@ export const ApartmentProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+
+  // Dynamically update document/tab title to the apartment name without its nickname
+  useEffect(() => {
+    if (selectedApartment?.name) {
+      document.title = `${selectedApartment.name} | Apartment System`;
+    } else {
+      document.title = 'ระบบจัดการหอพัก';
+    }
+  }, [selectedApartment?.name]);
 
   const fetchApartments = async () => {
     if (!owner) {

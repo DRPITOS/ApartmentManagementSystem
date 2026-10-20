@@ -3,6 +3,10 @@ import { Type } from 'class-transformer';
 
 export class UpdateRoomDto {
   @IsOptional()
+  @IsString({ message: 'apartmentId ต้องเป็นข้อความ' })
+  apartmentId?: string;
+
+  @IsOptional()
   @IsString({ message: 'หมายเลขห้องต้องเป็นข้อความ' })
   roomNumber?: string;
 

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useApartment } from '../contexts/ApartmentContext.js';
 import api from '../services/api.js';
-import type { Room } from '../types/index.js';
+import type { Room } from '../types';
 import { Modal } from '../components/Modal.js';
 import { Input } from '../components/Input.js';
 import { roomSchema } from '../utils/validation.js';
@@ -180,7 +180,8 @@ export const RoomListPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       if (editingRoom) {
-        await api.put(`/rooms/${editingRoom.id}`, payload);
+        const { apartmentId, ...updatePayload } = payload;
+        await api.put(`/rooms/${editingRoom.id}`, updatePayload);
       } else {
         await api.post('/rooms', payload);
       }
@@ -317,7 +318,7 @@ export const RoomListPage: React.FC = () => {
             placeholder="ค้นหาเลขห้อง หรือชื่อผู้เช่า..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-base font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600 transition-all"
+            className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-base font-medium focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
           />
         </div>
 
@@ -419,7 +420,7 @@ export const RoomListPage: React.FC = () => {
                   <div className="space-y-1 text-base text-slate-700 mb-4">
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-slate-400" />
-                      <span>{room.tenantName ? room.tenantName : <em className="text-slate-400">ยังไม่มีผู้เช่า</em>}</span>
+                      <span>{room.tenantName ? room.tenantName : <em className="text-slate-400">ไม่ระบุชื่อผู้เช่า</em>}</span>
                     </div>
                     {room.tenantPhone && (
                       <div className="flex items-center gap-2 text-sm text-slate-500">
