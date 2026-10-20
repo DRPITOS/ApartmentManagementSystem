@@ -27,6 +27,7 @@ export const DashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeBillReading, setActiveBillReading] = useState<MeterReading | null>(null);
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+  const [updatingReadingId, setUpdatingReadingId] = useState<string | null>(null);
 
   const fetchMonthlyData = async () => {
     if (!selectedApartment) return;
@@ -48,12 +49,19 @@ export const DashboardPage: React.FC = () => {
   }, [selectedApartment?.id, selectedMonth]);
 
   const handleToggleStatus = async (readingId: string, currentStatus: string) => {
+    if (updatingReadingId) return;
     const nextStatus = currentStatus === 'PAID' ? 'UNPAID' : 'PAID';
+    setUpdatingReadingId(readingId);
     try {
       await api.patch(`/meters/${readingId}/status`, { status: nextStatus });
       await fetchMonthlyData();
+      if (activeBillReading && activeBillReading.id === readingId) {
+        setActiveBillReading((prev) => (prev ? { ...prev, status: nextStatus } : null));
+      }
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะการชำระเงิน');
+    } finally {
+      setUpdatingReadingId(null);
     }
   };
 
@@ -326,14 +334,23 @@ export const DashboardPage: React.FC = () => {
                         {isRecorded ? (
                           <button
                             onClick={() => handleToggleStatus(reading.id, reading.status)}
-                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-base font-bold transition-all ${
-                              isPaid
+                            disabled={updatingReadingId === reading.id}
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-base font-bold transition-all cursor-pointer ${
+                              updatingReadingId === reading.id
+                                ? 'bg-slate-100 text-slate-700 border border-slate-300 shadow-xs cursor-wait'
+                                : isPaid
                                 ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                                 : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                             }`}
                             title="คลิกเพื่อสลับสถานะการชำระเงิน"
                           >
-                            {isPaid ? (
+                            {updatingReadingId === reading.id ? (
+                              <span className="inline-flex items-center justify-center px-4 tracking-widest text-indigo-600 font-black text-xl leading-none">
+                                <span className="animate-bounce inline-block" style={{ animationDelay: '0ms' }}>.</span>
+                                <span className="animate-bounce inline-block" style={{ animationDelay: '150ms' }}>.</span>
+                                <span className="animate-bounce inline-block" style={{ animationDelay: '300ms' }}>.</span>
+                              </span>
+                            ) : isPaid ? (
                               <>
                                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                                 <span>ชำระแล้ว</span>
@@ -395,6 +412,8 @@ export const DashboardPage: React.FC = () => {
         reading={activeBillReading}
         apartmentName={selectedApartment.name}
         apartmentNickname={selectedApartment.nickname}
+        onToggleStatus={handleToggleStatus}
+        isUpdatingStatus={activeBillReading ? updatingReadingId === activeBillReading.id : false}
       />
     </div>
   );

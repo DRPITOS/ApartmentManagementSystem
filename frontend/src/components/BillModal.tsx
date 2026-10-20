@@ -19,6 +19,8 @@ interface BillModalProps {
   room?: (Partial<Room> & { apartment?: { name?: string; nickname?: string } }) | null;
   apartmentName?: string;
   apartmentNickname?: string | null;
+  onToggleStatus?: (readingId: string, currentStatus: string) => Promise<void>;
+  isUpdatingStatus?: boolean;
 }
 
 export const BillModal: React.FC<BillModalProps> = ({
@@ -28,6 +30,8 @@ export const BillModal: React.FC<BillModalProps> = ({
   room: propRoom,
   apartmentName,
   apartmentNickname: _apartmentNickname,
+  onToggleStatus,
+  isUpdatingStatus = false,
 }) => {
   const [isExporting, setIsExporting] = useState<'image' | 'pdf' | null>(null);
 
@@ -48,20 +52,59 @@ export const BillModal: React.FC<BillModalProps> = ({
     const billElement = document.getElementById('printable-bill');
     if (!billElement) throw new Error('ไม่พบข้อมูลเอกสารบิล');
 
+    // Create an isolated standard-width container (700px) offscreen
+    // This ensures consistent, beautiful, non-squished rendering on ALL devices (Mobile, Tablet, Desktop)
+    const exportContainer = document.createElement('div');
+    exportContainer.style.position = 'fixed';
+    exportContainer.style.left = '-9999px';
+    exportContainer.style.top = '0';
+    exportContainer.style.width = '700px';
+    exportContainer.style.minWidth = '700px';
+    exportContainer.style.maxWidth = '700px';
+    exportContainer.style.zIndex = '-9999';
+    exportContainer.style.backgroundColor = '#ffffff';
+
+    const clone = billElement.cloneNode(true) as HTMLElement;
+    clone.style.width = '700px';
+    clone.style.minWidth = '700px';
+    clone.style.maxWidth = '700px';
+    clone.style.padding = '28px';
+    clone.style.borderRadius = '0';
+    clone.style.boxShadow = 'none';
+    clone.style.backgroundColor = '#ffffff';
+
+    // Remove any interactive or no-print buttons in the clone
+    clone.querySelectorAll('.no-print').forEach((el) => el.remove());
+
+    // Ensure all tables and elements in clone expand to full standard width
+    clone.querySelectorAll('.overflow-x-auto').forEach((el) => {
+      (el as HTMLElement).style.overflow = 'visible';
+    });
+
+    exportContainer.appendChild(clone);
+    document.body.appendChild(exportContainer);
+
     try {
-      return await toPng(billElement, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-      });
-    } catch (err) {
-      console.warn('html-to-image retry with font skipping:', err);
-      return await toPng(billElement, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        skipFonts: true,
-      });
+      // Allow browser layout engine to measure the clone at 700px
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      try {
+        return await toPng(clone, {
+          cacheBust: true,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+        });
+      } catch (err) {
+        console.warn('html-to-image retry with font skipping:', err);
+        return await toPng(clone, {
+          cacheBust: true,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          skipFonts: true,
+        });
+      }
+    } finally {
+      document.body.removeChild(exportContainer);
     }
   };
 
@@ -74,7 +117,9 @@ export const BillModal: React.FC<BillModalProps> = ({
       const roomNum = room?.roomNumber || reading.room?.roomNumber || 'room';
       link.download = `บิลค่าเช่า-ห้อง-${roomNum}-${reading.billingMonth}.png`;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
       console.error('Failed to export image:', err);
       alert('เกิดข้อผิดพลาดในการบันทึกรูปภาพ กรุณาลองใหม่อีกครั้ง');
@@ -103,11 +148,26 @@ export const BillModal: React.FC<BillModalProps> = ({
 
       // A4 dimensions: 210mm x 297mm
       const pageWidth = 210;
+      const pageHeight = 297;
       const margin = 12;
       const printableWidth = pageWidth - margin * 2; // 186mm
-      const imgHeight = (img.height * printableWidth) / img.width;
+      const rawHeight = (img.height * printableWidth) / img.width;
 
-      pdf.addImage(dataUrl, 'PNG', margin, margin, printableWidth, imgHeight);
+      const maxHeight = pageHeight - margin * 2; // 273mm
+      let finalWidth = printableWidth;
+      let finalHeight = rawHeight;
+      let posX = margin;
+      let posY = margin;
+
+      if (rawHeight > maxHeight) {
+        finalHeight = maxHeight;
+        finalWidth = (img.width * finalHeight) / img.height;
+        posX = margin + (printableWidth - finalWidth) / 2;
+      } else {
+        posY = Math.max(margin, (pageHeight - finalHeight) / 2);
+      }
+
+      pdf.addImage(dataUrl, 'PNG', posX, posY, finalWidth, finalHeight);
       const roomNum = room?.roomNumber || reading.room?.roomNumber || 'room';
       pdf.save(`บิลค่าเช่า-ห้อง-${roomNum}-${reading.billingMonth}.pdf`);
     } catch (err) {
@@ -169,29 +229,29 @@ export const BillModal: React.FC<BillModalProps> = ({
         </div>
 
         {/* Breakdown Table */}
-        <div className="border border-slate-200 rounded-xl overflow-hidden mb-5">
-          <table className="w-full text-left text-base sm:text-lg">
+        <div className="border border-slate-200 rounded-xl overflow-x-auto mb-5">
+          <table className="w-full text-left text-sm sm:text-base min-w-[480px]">
             <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold">
               <tr>
-                <th className="py-3 px-4">รายการ</th>
-                <th className="py-3 px-4 text-center">เลขมิเตอร์ / หน่วย</th>
-                <th className="py-3 px-4 text-right">ราคา/หน่วย</th>
-                <th className="py-3 px-4 text-right">จำนวนเงิน (บาท)</th>
+                <th className="py-3 px-3 sm:px-4">รายการ</th>
+                <th className="py-3 px-3 sm:px-4 text-center">เลขมิเตอร์ / หน่วย</th>
+                <th className="py-3 px-3 sm:px-4 text-right">ราคา/หน่วย</th>
+                <th className="py-3 px-3 sm:px-4 text-right">จำนวนเงิน (บาท)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {/* ค่าเช่าห้อง */}
               <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-4 font-medium text-slate-900">
+                <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
                   ค่าเช่าห้องพัก
                 </td>
-                <td className="py-3 px-4 text-center text-slate-500">
+                <td className="py-3 px-3 sm:px-4 text-center text-slate-500">
                   1 เดือน
                 </td>
-                <td className="py-3 px-4 text-right text-slate-500">
+                <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
                   {reading.baseRentPrice.toLocaleString('th-TH')}
                 </td>
-                <td className="py-3 px-4 text-right font-bold text-slate-900">
+                <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
                   {reading.baseRentPrice.toLocaleString('th-TH', {
                     minimumFractionDigits: 2,
                   })}
@@ -200,21 +260,21 @@ export const BillModal: React.FC<BillModalProps> = ({
 
               {/* ค่าไฟฟ้า */}
               <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-4 font-medium text-slate-900">
+                <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
                   <div className="flex items-center gap-1.5 text-amber-700">
                     <span>⚡ ค่าไฟฟ้า</span>
                   </div>
-                  <div className="text-sm text-slate-500">
+                  <div className="text-xs sm:text-sm text-slate-500">
                     {reading.previousElectricity} ➔ {reading.currentElectricity}
                   </div>
                 </td>
-                <td className="py-3 px-4 text-center font-semibold text-slate-800">
+                <td className="py-3 px-3 sm:px-4 text-center font-semibold text-slate-800">
                   {reading.electricityUnits} หน่วย
                 </td>
-                <td className="py-3 px-4 text-right text-slate-500">
+                <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
                   {reading.electricityRate} ฿
                 </td>
-                <td className="py-3 px-4 text-right font-bold text-slate-900">
+                <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
                   {reading.electricityCost.toLocaleString('th-TH', {
                     minimumFractionDigits: 2,
                   })}
@@ -223,21 +283,21 @@ export const BillModal: React.FC<BillModalProps> = ({
 
               {/* ค่าน้ำประปา */}
               <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-4 font-medium text-slate-900">
+                <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
                   <div className="flex items-center gap-1.5 text-sky-700">
                     <span>💧 ค่าน้ำประปา</span>
                   </div>
-                  <div className="text-sm text-slate-500">
+                  <div className="text-xs sm:text-sm text-slate-500">
                     {reading.previousWater} ➔ {reading.currentWater}
                   </div>
                 </td>
-                <td className="py-3 px-4 text-center font-semibold text-slate-800">
+                <td className="py-3 px-3 sm:px-4 text-center font-semibold text-slate-800">
                   {reading.waterUnits} หน่วย
                 </td>
-                <td className="py-3 px-4 text-right text-slate-500">
+                <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
                   {reading.waterRate} ฿
                 </td>
-                <td className="py-3 px-4 text-right font-bold text-slate-900">
+                <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
                   {reading.waterCost.toLocaleString('th-TH', {
                     minimumFractionDigits: 2,
                   })}
@@ -248,12 +308,12 @@ export const BillModal: React.FC<BillModalProps> = ({
               {reading.otherFees > 0 && (
                 <tr className="hover:bg-slate-50/50">
                   <td
-                    className="py-3 px-4 font-medium text-slate-900"
+                    className="py-3 px-3 sm:px-4 font-medium text-slate-900"
                     colSpan={3}
                   >
                     {reading.otherFeesNote || 'ค่าส่วนกลาง / ค่าขยะ'}
                   </td>
-                  <td className="py-3 px-4 text-right font-bold text-slate-900">
+                  <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
                     {reading.otherFees.toLocaleString('th-TH', {
                       minimumFractionDigits: 2,
                     })}
@@ -263,10 +323,10 @@ export const BillModal: React.FC<BillModalProps> = ({
             </tbody>
             <tfoot className="bg-indigo-50/80 font-bold border-t-2 border-indigo-200 text-indigo-950">
               <tr>
-                <td className="py-4 px-4 text-lg sm:text-xl" colSpan={3}>
+                <td className="py-4 px-3 sm:px-4 text-base sm:text-xl" colSpan={3}>
                   ยอดรวมที่ต้องชำระทั้งสิ้น
                 </td>
-                <td className="py-4 px-4 text-right text-xl sm:text-2xl text-indigo-700">
+                <td className="py-4 px-3 sm:px-4 text-right text-lg sm:text-2xl text-indigo-700">
                   ฿
                   {reading.totalAmount.toLocaleString('th-TH', {
                     minimumFractionDigits: 2,
@@ -280,7 +340,39 @@ export const BillModal: React.FC<BillModalProps> = ({
         {/* Status Badge */}
         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
           <div className="flex items-center gap-2">
-            {isPaid ? (
+            {onToggleStatus ? (
+              <button
+                type="button"
+                onClick={() => onToggleStatus(reading.id, reading.status)}
+                disabled={isUpdatingStatus}
+                title="คลิกเพื่อสลับสถานะการชำระเงิน"
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-bold text-base transition-all cursor-pointer ${
+                  isUpdatingStatus
+                    ? 'bg-slate-200 text-slate-700 cursor-wait'
+                    : isPaid
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                    : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                }`}
+              >
+                {isUpdatingStatus ? (
+                  <span className="inline-flex items-center justify-center px-4 tracking-widest text-indigo-600 font-black text-xl leading-none">
+                    <span className="animate-bounce inline-block" style={{ animationDelay: '0ms' }}>.</span>
+                    <span className="animate-bounce inline-block" style={{ animationDelay: '150ms' }}>.</span>
+                    <span className="animate-bounce inline-block" style={{ animationDelay: '300ms' }}>.</span>
+                  </span>
+                ) : isPaid ? (
+                  <>
+                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+                    <span>ชำระเงินเรียบร้อยแล้ว</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-5 h-5 text-amber-600" />
+                    <span>รอชำระเงิน</span>
+                  </>
+                )}
+              </button>
+            ) : isPaid ? (
               <span className="flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-3.5 py-1.5 rounded-full font-bold text-base">
                 <CheckCircle className="w-5 h-5 text-emerald-600" />
                 ชำระเงินเรียบร้อยแล้ว
@@ -292,7 +384,7 @@ export const BillModal: React.FC<BillModalProps> = ({
               </span>
             )}
           </div>
-          <div className="text-right text-sm text-slate-500">
+          <div className="text-right text-xs sm:text-sm text-slate-500">
             วันที่บันทึก:{' '}
             {new Date(reading.readingDate).toLocaleDateString('th-TH')}
           </div>
