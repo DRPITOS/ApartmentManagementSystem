@@ -120,11 +120,11 @@ export const MeterReadingPage: React.FC = () => {
             waterRate: existingReading.waterRate ?? waterRate,
             waterBillingType,
             flatWaterRate,
-            commonFee: existingReading.commonFee ?? defaultCommonFee,
-            trashFee: existingReading.trashFee ?? defaultTrashFee,
-            otherFees: existingReading.otherFees ?? defaultOtherFee,
-            otherFeesNote: existingReading.otherFeesNote ?? defaultOtherFeeNote,
-            slipNote: existingReading.note ?? defaultRemarkTemplate,
+            commonFee: (existingReading.commonFee && existingReading.commonFee > 0) ? existingReading.commonFee : defaultCommonFee,
+            trashFee: (existingReading.trashFee && existingReading.trashFee > 0) ? existingReading.trashFee : defaultTrashFee,
+            otherFees: (existingReading.otherFees && existingReading.otherFees > 0) ? existingReading.otherFees : defaultOtherFee,
+            otherFeesNote: existingReading.otherFeesNote || defaultOtherFeeNote,
+            slipNote: existingReading.note || defaultRemarkTemplate,
             isSaved: true,
             isSaving: false,
             lastReadingId: existingReading.id,
@@ -391,6 +391,11 @@ export const MeterReadingPage: React.FC = () => {
     if (!state.lastReading) return;
     setActiveBillReading({
       ...state.lastReading,
+      commonFee: (state.lastReading.commonFee && state.lastReading.commonFee > 0) ? state.lastReading.commonFee : (Number(state.commonFee) || selectedApartment?.commonFee || 0),
+      trashFee: (state.lastReading.trashFee && state.lastReading.trashFee > 0) ? state.lastReading.trashFee : (Number(state.trashFee) || selectedApartment?.trashFee || 0),
+      otherFees: state.lastReading.otherFees ?? (Number(state.otherFees) || 0),
+      otherFeesNote: state.lastReading.otherFeesNote || state.otherFeesNote || selectedApartment?.defaultOtherFeeNote || '',
+      note: state.lastReading.note || state.slipNote || selectedApartment?.remarkTemplate || '',
       room: {
         id: state.roomId,
         roomNumber: state.roomNumber,
@@ -892,6 +897,7 @@ export const MeterReadingPage: React.FC = () => {
         isOpen={isBillModalOpen}
         onClose={() => setIsBillModalOpen(false)}
         reading={activeBillReading}
+        apartment={selectedApartment}
         apartmentName={selectedApartment.name}
         apartmentNickname={selectedApartment.nickname}
       />

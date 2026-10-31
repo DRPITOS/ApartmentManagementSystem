@@ -10,6 +10,8 @@ import {
   QrCode,
   Save,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -23,17 +25,101 @@ interface BillModalProps {
   onClose: () => void;
   reading: MeterReading | null;
   room?: (Partial<Room> & { apartment?: Partial<Apartment> }) | null;
+  apartment?: Partial<Apartment> | null;
   apartmentName?: string;
   apartmentNickname?: string | null;
   onToggleStatus?: (readingId: string, currentStatus: string) => Promise<void>;
   isUpdatingStatus?: boolean;
 }
 
+const THAI_MONTHS = [
+  'มกราคม',
+  'กุมภาพันธ์',
+  'มีนาคม',
+  'เมษายน',
+  'พฤษภาคม',
+  'มิถุนายน',
+  'กรกฎาคม',
+  'สิงหาคม',
+  'กันยายน',
+  'ตุลาคม',
+  'พฤศจิกายน',
+  'ธันวาคม',
+];
+
+const ENGLISH_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const formatThaiFullDate = (dateStr?: string | Date): string => {
+  const date = dateStr ? new Date(dateStr) : new Date();
+  const d = isNaN(date.getTime()) ? new Date() : date;
+  const day = d.getDate();
+  const month = THAI_MONTHS[d.getMonth()];
+  const year = d.getFullYear() + 543;
+  return `${day} ${month} ${year}`;
+};
+
+const formatThaiDueDate = (billingMonthStr?: string): string => {
+  if (billingMonthStr && /^\d{4}-\d{2}$/.test(billingMonthStr)) {
+    const [yStr, mStr] = billingMonthStr.split('-');
+    let year = parseInt(yStr, 10);
+    let month = parseInt(mStr, 10);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    return `1 ${THAI_MONTHS[month - 1]} ${year + 543}`;
+  }
+  const now = new Date();
+  let m = now.getMonth() + 1;
+  let y = now.getFullYear();
+  if (m > 11) {
+    m = 0;
+    y += 1;
+  }
+  return `1 ${THAI_MONTHS[m]} ${y + 543}`;
+};
+
+const formatSlipFileName = (
+  billingMonthStr: string | undefined,
+  roomNumber: string | number,
+  ext: 'png' | 'pdf'
+): string => {
+  let monthName = 'Bill';
+  let yearStr = new Date().getFullYear().toString();
+
+  if (billingMonthStr && /^\d{4}-\d{2}$/.test(billingMonthStr)) {
+    const [y, m] = billingMonthStr.split('-');
+    const mIndex = parseInt(m, 10) - 1;
+    if (mIndex >= 0 && mIndex < 12) {
+      monthName = ENGLISH_MONTHS[mIndex];
+    }
+    yearStr = y;
+  }
+
+  const cleanRoom = roomNumber ? `Room ${roomNumber}` : 'Room';
+  return `${monthName} ${yearStr} ${cleanRoom}.${ext}`;
+};
+
 export const BillModal: React.FC<BillModalProps> = ({
   isOpen,
   onClose,
   reading: initialReading,
   room: propRoom,
+  apartment: propApartment,
   apartmentName,
   apartmentNickname: _apartmentNickname,
   onToggleStatus,
@@ -55,7 +141,7 @@ export const BillModal: React.FC<BillModalProps> = ({
   const [isSavingPromptPay, setIsSavingPromptPay] = useState(false);
 
   const room = reading?.room || propRoom;
-  const apt = room?.apartment;
+  const apt = room?.apartment || propApartment;
 
   // Sync initial reading
   useEffect(() => {
@@ -80,16 +166,42 @@ export const BillModal: React.FC<BillModalProps> = ({
     }
   }, [initialReading, apt?.remarkTemplate, apt?.promptPayNumber, apt?.promptPayName]);
 
+  // Fallback calculation for commonFee and trashFee
+  const defaultCommonFee = apt?.commonFee ?? 0;
+  const defaultTrashFee = apt?.trashFee ?? 0;
+
+  const effectiveCommonFee =
+    reading?.commonFee !== undefined && reading?.commonFee !== null && Number(reading.commonFee) > 0
+      ? Number(reading.commonFee)
+      : Number(defaultCommonFee) || 0;
+
+  const effectiveTrashFee =
+    reading?.trashFee !== undefined && reading?.trashFee !== null && Number(reading.trashFee) > 0
+      ? Number(reading.trashFee)
+      : Number(defaultTrashFee) || 0;
+
+  const effectiveOtherFees = Number(reading?.otherFees) || 0;
+  const effectiveOtherFeesNote = reading?.otherFeesNote || apt?.defaultOtherFeeNote || '';
+
+  const effectiveTotal = reading
+    ? Number(reading.baseRentPrice || 0) +
+      Number(reading.electricityCost || 0) +
+      Number(reading.waterCost || 0) +
+      effectiveCommonFee +
+      effectiveTrashFee +
+      effectiveOtherFees
+    : 0;
+
   // Generate QR Code when reading or promptPayNumber changes
   useEffect(() => {
     let isCancelled = false;
     const loadQr = async () => {
-      if (!promptPayNumber || !reading) {
+      if (!promptPayNumber || !reading || effectiveTotal <= 0) {
         setQrDataUrl(null);
         return;
       }
       try {
-        const url = await generatePromptPayQrDataUrl(promptPayNumber, reading.totalAmount, 300);
+        const url = await generatePromptPayQrDataUrl(promptPayNumber, effectiveTotal, 300);
         if (!isCancelled) {
           setQrDataUrl(url);
         }
@@ -105,11 +217,12 @@ export const BillModal: React.FC<BillModalProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [promptPayNumber, reading]);
+  }, [promptPayNumber, reading, effectiveTotal]);
 
   if (!reading) return null;
 
   const isPaid = reading.status === 'PAID';
+  const roomNum = room?.roomNumber || reading.room?.roomNumber || '-';
 
   const handleSaveNote = async () => {
     if (!reading) return;
@@ -159,33 +272,24 @@ export const BillModal: React.FC<BillModalProps> = ({
     const billElement = document.getElementById('printable-bill');
     if (!billElement) throw new Error('ไม่พบข้อมูลเอกสารบิล');
 
-    // Create an isolated standard-width container (700px) offscreen
     const exportContainer = document.createElement('div');
     exportContainer.style.position = 'fixed';
     exportContainer.style.left = '-9999px';
     exportContainer.style.top = '0';
-    exportContainer.style.width = '700px';
-    exportContainer.style.minWidth = '700px';
-    exportContainer.style.maxWidth = '700px';
+    exportContainer.style.width = '740px';
+    exportContainer.style.minWidth = '740px';
+    exportContainer.style.maxWidth = '740px';
     exportContainer.style.zIndex = '-9999';
     exportContainer.style.backgroundColor = '#ffffff';
 
     const clone = billElement.cloneNode(true) as HTMLElement;
-    clone.style.width = '700px';
-    clone.style.minWidth = '700px';
-    clone.style.maxWidth = '700px';
-    clone.style.padding = '28px';
-    clone.style.borderRadius = '0';
-    clone.style.boxShadow = 'none';
+    clone.style.width = '740px';
+    clone.style.minWidth = '740px';
+    clone.style.maxWidth = '740px';
     clone.style.backgroundColor = '#ffffff';
 
     // Remove any interactive or no-print buttons in the clone
     clone.querySelectorAll('.no-print').forEach((el) => el.remove());
-
-    // Ensure all tables and elements in clone expand to full standard width
-    clone.querySelectorAll('.overflow-x-auto').forEach((el) => {
-      (el as HTMLElement).style.overflow = 'visible';
-    });
 
     exportContainer.appendChild(clone);
     document.body.appendChild(exportContainer);
@@ -214,13 +318,12 @@ export const BillModal: React.FC<BillModalProps> = ({
   };
 
   const handleSaveImage = async () => {
-    if (isExporting) return;
+    if (isExporting || !reading) return;
     try {
       setIsExporting('image');
       const dataUrl = await generateBillDataUrl();
       const link = document.createElement('a');
-      const roomNum = room?.roomNumber || reading.room?.roomNumber || 'room';
-      link.download = `บิลค่าเช่า-ห้อง-${roomNum}-${reading.billingMonth}.png`;
+      link.download = formatSlipFileName(reading.billingMonth, roomNum, 'png');
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -234,7 +337,7 @@ export const BillModal: React.FC<BillModalProps> = ({
   };
 
   const handleSavePdf = async () => {
-    if (isExporting) return;
+    if (isExporting || !reading) return;
     try {
       setIsExporting('pdf');
       const dataUrl = await generateBillDataUrl();
@@ -253,7 +356,7 @@ export const BillModal: React.FC<BillModalProps> = ({
 
       const pageWidth = 210;
       const pageHeight = 297;
-      const margin = 12;
+      const margin = 10;
       const printableWidth = pageWidth - margin * 2;
       const rawHeight = (img.height * printableWidth) / img.width;
 
@@ -272,8 +375,7 @@ export const BillModal: React.FC<BillModalProps> = ({
       }
 
       pdf.addImage(dataUrl, 'PNG', posX, posY, finalWidth, finalHeight);
-      const roomNum = room?.roomNumber || reading.room?.roomNumber || 'room';
-      pdf.save(`บิลค่าเช่า-ห้อง-${roomNum}-${reading.billingMonth}.pdf`);
+      pdf.save(formatSlipFileName(reading.billingMonth, roomNum, 'pdf'));
     } catch (err) {
       console.error('Failed to export PDF:', err);
       alert('เกิดข้อผิดพลาดในการบันทึกไฟล์ PDF กรุณาลองใหม่อีกครั้ง');
@@ -283,425 +385,276 @@ export const BillModal: React.FC<BillModalProps> = ({
   };
 
   const displayNote = noteText || reading.note || apt?.remarkTemplate || '';
+  const thaiReadingDate = formatThaiFullDate(reading.readingDate);
+  const thaiDueDate = formatThaiDueDate(reading.billingMonth);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="ใบแจ้งค่าเช่าและค่าสาธารณูปโภค"
-      maxWidth="max-w-2xl"
+      title={`ใบเรียกเก็บเงิน - ห้อง ${roomNum}`}
+      maxWidth="max-w-3xl"
     >
-      {/* Printable / Exportable Bill Area */}
-      <div
-        id="printable-bill"
-        className="bg-white rounded-xl p-2 sm:p-5 text-slate-800 print:p-0 print:text-black"
-      >
-        {/* Header */}
-        <div className="text-center pb-4 border-b-2 border-dashed border-slate-200">
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-indigo-950">
-            {apartmentName ||
-              apt?.name ||
-              reading.room?.apartment?.name ||
-              'หอพัก / อพาร์ตเมนต์'}
-          </h2>
-          <div className="inline-block mt-2 px-4 py-1 bg-slate-100 rounded-full text-sm sm:text-base font-semibold text-slate-700">
-            รอบบิลประจำเดือน: {reading.billingMonth}
-          </div>
-        </div>
+      {/* Outer Scroll Container for smaller screens */}
+      <div className="overflow-x-auto pb-2">
+        {/* Printable / Exportable Bill Area matching receipt_template.png */}
+        <div
+          id="printable-bill"
+          className="bg-white border-[3px] border-[#1a56db] p-5 sm:p-7 text-slate-800 print:p-4 print:border-[3px] print:border-[#1a56db] select-text relative min-w-[650px] max-w-[740px] mx-auto"
+        >
+          <div className="flex">
+            {/* Left Vertical Room Label */}
+            <div className="w-10 sm:w-12 flex-shrink-0 flex items-center justify-center -ml-2 sm:-ml-3 select-none">
+              <div
+                className="transform -rotate-90 whitespace-nowrap text-xl sm:text-2xl font-black text-slate-900 tracking-wider"
+                style={{ transformOrigin: 'center center' }}
+              >
+                ห้อง {roomNum}
+              </div>
+            </div>
 
-        {/* Room & Tenant Info */}
-        <div className="grid grid-cols-2 gap-4 my-4 bg-slate-50 p-4 rounded-xl text-base sm:text-lg">
-          <div>
-            <span className="text-slate-500 block text-xs sm:text-sm">
-              ห้องพัก
-            </span>
-            <span className="font-extrabold text-2xl sm:text-3xl text-indigo-950">
-              {room?.roomNumber || reading.room?.roomNumber || '-'}
-            </span>
-          </div>
-          <div>
-            <span className="text-slate-500 block text-xs sm:text-sm">
-              ผู้เช่า
-            </span>
-            <span className="font-bold text-slate-900 text-lg">
-              {room?.tenantName || reading.room?.tenantName || 'ไม่ระบุชื่อ'}
-            </span>
-            {(room?.tenantPhone || reading.room?.tenantPhone) && (
-              <span className="block text-xs sm:text-sm text-slate-500">
-                โทร: {room?.tenantPhone || reading.room?.tenantPhone}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Breakdown Table */}
-        <div className="border border-slate-200 rounded-xl overflow-x-auto mb-4">
-          <table className="w-full text-left text-sm sm:text-base min-w-[480px]">
-            <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold">
-              <tr>
-                <th className="py-3 px-3 sm:px-4">รายการ</th>
-                <th className="py-3 px-3 sm:px-4 text-center">จำนวน / หน่วย</th>
-                <th className="py-3 px-3 sm:px-4 text-right">ราคา/หน่วย</th>
-                <th className="py-3 px-3 sm:px-4 text-right">จำนวนเงิน (บาท)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {/* ค่าเช่าห้อง */}
-              <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-3 sm:px-4 font-semibold text-slate-900">
-                  ค่าเช่าห้องพัก
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-center text-slate-500">
-                  1 เดือน
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
-                  {reading.baseRentPrice.toLocaleString('th-TH')}
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
-                  {reading.baseRentPrice.toLocaleString('th-TH', {
-                    minimumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
-
-              {/* ค่าไฟฟ้า */}
-              <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
-                  <div className="flex items-center gap-1.5 text-amber-800 font-bold">
-                    <span>⚡ ค่าไฟฟ้า</span>
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    เลขมิเตอร์: {reading.previousElectricity} ➔ {reading.currentElectricity}
-                  </div>
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-center font-semibold text-slate-800">
-                  {reading.electricityUnits} หน่วย
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
-                  {reading.electricityRate} ฿
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
-                  {reading.electricityCost.toLocaleString('th-TH', {
-                    minimumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
-
-              {/* ค่าน้ำประปา */}
-              <tr className="hover:bg-slate-50/50">
-                <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
-                  <div className="flex items-center gap-1.5 text-sky-800 font-bold">
-                    <span>💧 ค่าน้ำประปา</span>
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    เลขมิเตอร์: {reading.previousWater} ➔ {reading.currentWater}
-                  </div>
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-center font-semibold text-slate-800">
-                  {reading.waterUnits} หน่วย
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
-                  {reading.waterRate} ฿
-                </td>
-                <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
-                  {reading.waterCost.toLocaleString('th-TH', {
-                    minimumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
-
-              {/* ค่าส่วนกลาง */}
-              {reading.commonFee > 0 && (
-                <tr className="hover:bg-slate-50/50">
-                  <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
-                    ค่าส่วนกลาง
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-center text-slate-500">
-                    1 เดือน
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
-                    {reading.commonFee.toLocaleString('th-TH')}
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
-                    {reading.commonFee.toLocaleString('th-TH', {
-                      minimumFractionDigits: 2,
-                    })}
-                  </td>
-                </tr>
-              )}
-
-              {/* ค่าขยะ */}
-              {reading.trashFee > 0 && (
-                <tr className="hover:bg-slate-50/50">
-                  <td className="py-3 px-3 sm:px-4 font-medium text-slate-900">
-                    ค่าขยะ
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-center text-slate-500">
-                    1 เดือน
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-right text-slate-500">
-                    {reading.trashFee.toLocaleString('th-TH')}
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
-                    {reading.trashFee.toLocaleString('th-TH', {
-                      minimumFractionDigits: 2,
-                    })}
-                  </td>
-                </tr>
-              )}
-
-              {/* ค่าใช้จ่ายอื่นๆ */}
-              {reading.otherFees > 0 && (
-                <tr className="hover:bg-slate-50/50">
-                  <td
-                    className="py-3 px-3 sm:px-4 font-medium text-slate-900"
-                    colSpan={3}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>ค่าใช้จ่ายอื่นๆ</span>
-                      {reading.otherFeesNote && (
-                        <span className="text-slate-600 font-semibold">
-                          ({reading.otherFeesNote})
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 sm:px-4 text-right font-bold text-slate-900">
-                    {reading.otherFees.toLocaleString('th-TH', {
-                      minimumFractionDigits: 2,
-                    })}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            <tfoot className="bg-indigo-50/90 font-bold border-t-2 border-indigo-200 text-indigo-950">
-              <tr>
-                <td className="py-3.5 px-3 sm:px-4 text-base sm:text-xl" colSpan={3}>
-                  ยอดรวมที่ต้องชำระทั้งสิ้น
-                </td>
-                <td className="py-3.5 px-3 sm:px-4 text-right text-xl sm:text-2xl text-indigo-700">
-                  ฿
-                  {reading.totalAmount.toLocaleString('th-TH', {
-                    minimumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        {/* Remarks and PromptPay Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-          {/* Slip Remarks Section */}
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-1.5">
-                  <span>📌 หมายเหตุ (Remarks)</span>
-                </span>
-
-                {/* Edit remarks button (no-print) */}
-                <div className="no-print">
-                  {!isEditingNote ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingNote(true)}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-white border border-slate-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                      title="แก้ไขหมายเหตุบนสลิปของห้องนี้"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>แก้ไข</span>
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleSaveNote}
-                        disabled={isSavingNote}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                      >
-                        {isSavingNote ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Save className="w-3.5 h-3.5" />
-                        )}
-                        <span>บันทึก</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNoteText(reading.note || '');
-                          setIsEditingNote(false);
-                        }}
-                        className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
+            {/* Main Content Column */}
+            <div className="flex-1 min-w-0 pr-1">
+              {/* Header: ใบเรียกเก็บเงิน + ห้อง X */}
+              <div className="flex items-center justify-center gap-6 sm:gap-10 mb-4 sm:mb-5">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#1e3a8a] underline underline-offset-4 tracking-wide">
+                  ใบเรียกเก็บเงิน
+                </h2>
+                <div className="bg-[#dbeafe] px-6 sm:px-8 py-1 sm:py-1.5 rounded-xs text-lg sm:text-xl font-bold text-slate-900 border border-blue-200/60 shadow-2xs">
+                  ห้อง {roomNum}
                 </div>
               </div>
 
-              {isEditingNote ? (
-                <div className="no-print mt-1">
-                  <textarea
-                    rows={3}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="พิมพ์หมายเหตุสำหรับสลิปห้องนี้..."
-                    className="w-full bg-white border border-indigo-300 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                  />
-                  <span className="text-xs text-slate-500 block mt-1">
-                    *หมายเหตุนี้จะถูกบันทึกและแสดงบนสลิปของห้องนี้
+              {/* Date Row */}
+              <div className="flex items-center justify-between text-sm sm:text-base font-semibold mb-3 sm:mb-4 px-1">
+                <div className="flex items-center gap-6 sm:gap-10">
+                  <span className="text-slate-800 font-medium">จดวันที่</span>
+                  <span className="text-slate-900 font-bold">{thaiReadingDate}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#c2410c] font-bold">วันที่ต้องชำระ</span>
+                  <span className="bg-[#fef08a] px-2.5 py-0.5 underline font-bold text-slate-900 border border-amber-300/80 rounded-xs">
+                    {thaiDueDate}
                   </span>
                 </div>
-              ) : (
-                <p className="text-sm sm:text-base text-slate-700 whitespace-pre-wrap leading-relaxed">
-                  {displayNote || (
-                    <span className="text-slate-400 italic">ไม่มีหมายเหตุเพิ่มเติม</span>
-                  )}
-                </p>
-              )}
-            </div>
+              </div>
 
-            <div className="text-xs text-slate-400 mt-3 pt-2 border-t border-slate-200/80">
-              วันที่บันทึกบิล: {new Date(reading.readingDate).toLocaleDateString('th-TH')}
-            </div>
-          </div>
+              {/* Itemized Rows */}
+              <div className="space-y-1.5 sm:space-y-2 text-sm sm:text-base px-1 my-2">
+                {/* ค่าไฟ */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between w-48 sm:w-56">
+                    <span className="font-medium text-slate-800">ค่าไฟ</span>
+                    <span className="font-semibold text-slate-900 text-right">
+                      {reading.electricityCost.toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      บาท
+                    </span>
+                  </div>
+                  <div className="text-right text-slate-700 font-medium">
+                    (เลขที่จด{' '}
+                    <span className="font-bold text-slate-900 mx-1">
+                      {reading.currentElectricity}
+                    </span>{' '}
+                    จำนวน{' '}
+                    <span className="font-bold text-slate-900 mx-1">
+                      {reading.electricityUnits}
+                    </span>{' '}
+                    หน่วย)
+                  </div>
+                </div>
 
-          {/* PromptPay QR Code Section */}
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col items-center justify-center text-center">
-            {promptPayNumber ? (
-              <div className="w-full flex flex-col items-center">
-                {/* PromptPay Brand Header */}
-                <div className="w-full max-w-[240px] bg-[#00264d] text-white py-1 px-3 rounded-t-xl flex items-center justify-center gap-1.5">
-                  <QrCode className="w-4 h-4 text-amber-400" />
-                  <span className="font-black text-sm tracking-wide">
-                    PromptPay พร้อมเพย์
+                {/* ค่าน้ำ */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between w-48 sm:w-56">
+                    <span className="font-medium text-slate-800">ค่าน้ำ</span>
+                    <span className="font-semibold text-slate-900 text-right">
+                      {reading.waterCost.toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      บาท
+                    </span>
+                  </div>
+                  <div className="text-right text-slate-700 font-medium">
+                    (เลขที่จด{' '}
+                    <span className="font-bold text-slate-900 mx-1">
+                      {reading.currentWater}
+                    </span>{' '}
+                    จำนวน{' '}
+                    <span className="font-bold text-slate-900 mx-1">
+                      {reading.waterUnits}
+                    </span>{' '}
+                    หน่วย)
+                  </div>
+                </div>
+
+                {/* ค่าขยะ */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between w-48 sm:w-56">
+                    <span className="font-medium text-slate-800">ค่าขยะ</span>
+                    <span className="font-semibold text-slate-900 text-right">
+                      {effectiveTrashFee.toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      บาท
+                    </span>
+                  </div>
+                  <div className="text-right text-slate-700 font-medium">
+                    (ค่าไฟหน่วยละ{' '}
+                    <span className="font-bold text-slate-900 mx-1">
+                      {reading.electricityRate}
+                    </span>{' '}
+                    บาท)
+                  </div>
+                </div>
+
+                {/* ค่าเช่าห้อง */}
+                {reading.baseRentPrice > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between w-48 sm:w-56">
+                      <span className="font-medium text-slate-800">ค่าเช่าห้อง</span>
+                      <span className="font-semibold text-slate-900 text-right">
+                        {reading.baseRentPrice.toLocaleString('th-TH', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        บาท
+                      </span>
+                    </div>
+                    <div className="text-right text-slate-700 font-medium">
+                      (ค่าน้ำหน่วยละ{' '}
+                      <span className="font-bold text-slate-900 mx-1">
+                        {reading.waterRate}
+                      </span>{' '}
+                      บาท)
+                    </div>
+                  </div>
+                )}
+
+                {/* If no baseRentPrice, still show water rate */}
+                {reading.baseRentPrice <= 0 && (
+                  <div className="flex items-center justify-end">
+                    <div className="text-right text-slate-700 font-medium">
+                      (ค่าน้ำหน่วยละ{' '}
+                      <span className="font-bold text-slate-900 mx-1">
+                        {reading.waterRate}
+                      </span>{' '}
+                      บาท)
+                    </div>
+                  </div>
+                )}
+
+                {/* ค่าใช้จ่ายอื่นๆ / หมายเหตุพิเศษ (ตัวหนังสือสีแดงตาม template) */}
+                {effectiveOtherFees > 0 && (
+                  <div className="flex items-start justify-between text-red-600 font-semibold pt-1">
+                    <div className="whitespace-pre-wrap leading-relaxed max-w-[340px]">
+                      {effectiveOtherFeesNote || 'ค่าใช้จ่ายอื่นๆ'}
+                    </div>
+                    <div className="text-right font-bold">
+                      {effectiveOtherFees.toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      บาท
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Total Row */}
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-200 px-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-base sm:text-xl font-bold text-emerald-800 whitespace-nowrap">
+                    รวมยอดที่ต้องจ่าย
+                  </span>
+                  <span className="bg-[#fef08a] px-3 py-0.5 text-lg sm:text-2xl font-black text-slate-900 border border-amber-300 rounded-xs mx-1">
+                    {effectiveTotal.toLocaleString('th-TH', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-slate-800">
+                    บาท
                   </span>
                 </div>
 
-                {/* QR Box */}
-                <div className="bg-white p-3 border-2 border-[#00264d] rounded-b-xl shadow-xs flex flex-col items-center max-w-[240px] w-full">
+                {effectiveCommonFee > 0 && (
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base font-semibold text-slate-800">
+                    <span>ค่ารักษามิเตอร์น้ำ+ไฟ+ไฟส่วนกลาง</span>
+                    <span className="font-bold text-slate-900 text-sm sm:text-lg">
+                      {effectiveCommonFee.toLocaleString('th-TH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                    <span>บาท</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Section: PromptPay QR on the left + Bank Transfer / Remarks on the right */}
+              <div className="flex items-start gap-4 sm:gap-6 mt-4 pt-3 border-t border-slate-200 px-1">
+                {/* PromptPay Left Column */}
+                <div className="w-36 sm:w-44 flex-shrink-0 flex flex-col items-center text-center">
+                  {/* PromptPay Badge */}
+                  <div className="inline-flex items-center gap-1 px-3 py-0.5 border border-slate-400 rounded-xs bg-white shadow-2xs mb-1.5">
+                    <span className="text-[11px] font-black text-[#00264d] tracking-tight">Prompt</span>
+                    <span className="text-[11px] font-black text-[#0072ce] tracking-tight">Pay</span>
+                  </div>
+
+                  {/* QR Code */}
                   {qrDataUrl ? (
                     <img
                       src={qrDataUrl}
                       alt="PromptPay QR Code"
-                      className="w-36 h-36 object-contain"
+                      className="w-32 h-32 sm:w-36 sm:h-36 object-contain"
                     />
                   ) : (
-                    <div className="w-36 h-36 flex items-center justify-center bg-slate-100 rounded-lg">
-                      <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                    <div className="w-32 h-32 sm:w-36 sm:h-36 flex flex-col items-center justify-center bg-slate-50 border border-dashed border-slate-300 rounded text-slate-400 p-2 text-center text-xs">
+                      <QrCode className="w-8 h-8 text-slate-300 mb-1" />
+                      <span>ไม่มี QR Code</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">(ระบุเลขพร้อมเพย์)</span>
                     </div>
                   )}
 
-                  <div className="mt-2 text-center w-full">
-                    <span className="text-xs font-bold text-slate-500 block">
-                      สแกนจ่ายผ่านแอปธนาคาร
+                  <div className="text-center mt-1">
+                    <span className="text-[#059669] font-bold text-xs block">
+                      สแกน QR เพื่อโอนเข้าบัญชี
                     </span>
-                    <span className="text-base font-extrabold text-[#00264d] block">
-                      ฿{reading.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-700 block mt-0.5 truncate max-w-full">
-                      {promptPayName || apartmentName || apt?.name}
-                    </span>
-                    <span className="text-xs text-slate-500 block font-mono">
-                      {formatPromptPayDisplay(promptPayNumber)}
+                    <span className="text-slate-700 font-semibold text-xs block mt-0.5 truncate max-w-[170px]">
+                      ชื่อ: {promptPayName || apt?.promptPayName || apartmentName || apt?.name || 'เจ้าของห้องพัก'}
                     </span>
                   </div>
                 </div>
 
-                {/* Edit PromptPay (no-print) */}
-                <div className="no-print mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingPromptPay(!isSettingPromptPay)}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer underline"
-                  >
-                    เปลี่ยนข้อมูลพร้อมเพย์
-                  </button>
+                {/* Bank Accounts & Remarks Right Column */}
+                <div className="flex-1 min-w-0 flex flex-col justify-center text-xs sm:text-sm text-[#4a154b] font-medium leading-relaxed pt-2">
+                  <div className="whitespace-pre-wrap font-sans">
+                    {displayNote ? (
+                      displayNote
+                    ) : (
+                      <>
+                        <div>โอนเงินเข้าบัญชีตามข้อมูลที่ระบุ</div>
+                        <div>แล้วนำหลักฐานการโอนส่งให้เจ้าของบ้านด้วยครับ</div>
+                        <div>ชำระล่าช้าเกินกำหนดคิดค่าปรับเพิ่มวันละ 100 บาท</div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            ) : (
-              <div className="py-3 px-2">
-                <QrCode className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-                <span className="font-bold text-slate-700 block text-base">
-                  ยังไม่ได้ใส่ QR พร้อมเพย์
-                </span>
-                <p className="text-xs text-slate-500 mt-1 max-w-[200px] mx-auto">
-                  ใส่เบอร์หรือเลขพร้อมเพย์เพื่อให้ระบบสร้าง QR Code สแกนจ่ายบนสลิปอัตโนมัติ
-                </p>
-
-                <div className="no-print mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingPromptPay(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>ใส่ QR พร้อมเพย์บนสลิป</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* PromptPay Config Drawer (no-print) */}
-            {isSettingPromptPay && (
-              <div className="no-print w-full mt-3 p-3 bg-white border border-indigo-200 rounded-xl text-left space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950">
-                    ⚙️ ตั้งค่าพร้อมเพย์ของหอพัก
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingPromptPay(false)}
-                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-0.5">
-                    เบอร์มือถือ หรือ เลขบัตร ปชช.
-                  </label>
-                  <input
-                    type="text"
-                    value={promptPayNumber}
-                    onChange={(e) => setPromptPayNumber(e.target.value)}
-                    placeholder="เช่น 0812345678 หรือ 1234567890123"
-                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-0.5">
-                    ชื่อบัญชีผู้รับเงิน (แสดงบนสลิป)
-                  </label>
-                  <input
-                    type="text"
-                    value={promptPayName}
-                    onChange={(e) => setPromptPayName(e.target.value)}
-                    placeholder="เช่น นาย สมศักดิ์ ใจดี"
-                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSavePromptPay}
-                    disabled={isSavingPromptPay}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                  >
-                    {isSavingPromptPay ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>บันทึกพร้อมเพย์</span>
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Status Badge */}
-        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl">
+      {/* Interactive Controls & Settings Bar (Excluded from Print/Save) */}
+      <div className="no-print mt-4 space-y-3">
+        {/* Status & Quick Settings Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
           <div className="flex items-center gap-2">
             {onToggleStatus ? (
               <button
@@ -709,7 +662,7 @@ export const BillModal: React.FC<BillModalProps> = ({
                 onClick={() => onToggleStatus(reading.id, reading.status)}
                 disabled={isUpdatingStatus}
                 title="คลิกเพื่อสลับสถานะการชำระเงิน"
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-bold text-base transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-sm transition-all cursor-pointer ${
                   isUpdatingStatus
                     ? 'bg-slate-200 text-slate-700 cursor-wait'
                     : isPaid
@@ -718,48 +671,163 @@ export const BillModal: React.FC<BillModalProps> = ({
                 }`}
               >
                 {isUpdatingStatus ? (
-                  <span className="inline-flex items-center justify-center px-4 tracking-widest text-indigo-600 font-black text-xl leading-none">
-                    <span className="animate-bounce inline-block" style={{ animationDelay: '0ms' }}>.</span>
-                    <span className="animate-bounce inline-block" style={{ animationDelay: '150ms' }}>.</span>
-                    <span className="animate-bounce inline-block" style={{ animationDelay: '300ms' }}>.</span>
+                  <span className="inline-flex items-center gap-1 text-indigo-600 font-black text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>กำลังอัปเดต...</span>
                   </span>
                 ) : isPaid ? (
                   <>
-                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
                     <span>ชำระเงินเรียบร้อยแล้ว</span>
                   </>
                 ) : (
                   <>
-                    <Clock className="w-5 h-5 text-amber-600" />
+                    <Clock className="w-4 h-4 text-amber-600" />
                     <span>รอชำระเงิน</span>
                   </>
                 )}
               </button>
             ) : isPaid ? (
-              <span className="flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-3.5 py-1.5 rounded-full font-bold text-base">
-                <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <span className="flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full font-bold text-sm">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
                 ชำระเงินเรียบร้อยแล้ว
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-amber-800 bg-amber-100 px-3.5 py-1.5 rounded-full font-bold text-base">
-                <Clock className="w-5 h-5 text-amber-600" />
+              <span className="flex items-center gap-1.5 text-amber-800 bg-amber-100 px-3 py-1 rounded-full font-bold text-sm">
+                <Clock className="w-4 h-4 text-amber-600" />
                 รอชำระเงิน
               </span>
             )}
           </div>
-          <div className="text-right text-xs sm:text-sm text-slate-500">
-            สถานะบิล: {isPaid ? 'จ่ายแล้ว' : 'รอชำระ'}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEditingNote(!isEditingNote)}
+              className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{isEditingNote ? 'ปิดแก้ไขหมายเหตุ' : 'แก้ไขหมายเหตุ/บัญชี'}</span>
+              {isEditingNote ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSettingPromptPay(!isSettingPromptPay)}
+              className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-indigo-600 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>{isSettingPromptPay ? 'ปิดตั้งค่าพร้อมเพย์' : 'ตั้งค่าพร้อมเพย์'}</span>
+              {isSettingPromptPay ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
           </div>
         </div>
+
+        {/* Edit Note Drawer */}
+        {isEditingNote && (
+          <div className="p-3 bg-white border border-indigo-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-indigo-950">
+                📝 แก้ไขหมายเหตุ / รายการบัญชีธนาคารบนสลิปของห้องนี้
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsEditingNote(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <textarea
+              rows={4}
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="พิมพ์ข้อมูลบัญชีธนาคาร หรือหมายเหตุสำหรับสลิปห้องนี้..."
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 font-sans"
+            />
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-500">
+                *ข้อความนี้จะแสดงด้านขวาของ QR Code ในใบเรียกเก็บเงิน
+              </span>
+              <button
+                type="button"
+                onClick={handleSaveNote}
+                disabled={isSavingNote}
+                className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+              >
+                {isSavingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>บันทึกหมายเหตุ</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit PromptPay Drawer */}
+        {isSettingPromptPay && (
+          <div className="p-3 bg-white border border-indigo-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-indigo-950">
+                ⚙️ ตั้งค่าพร้อมเพย์ของหอพัก (PromptPay)
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSettingPromptPay(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                  เบอร์มือถือ (10 หลัก) หรือ เลขบัตร ปชช./นิติบุคคล (13 หลัก)
+                </label>
+                <input
+                  type="text"
+                  value={promptPayNumber}
+                  onChange={(e) => setPromptPayNumber(e.target.value)}
+                  placeholder="เช่น 0812345678"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                  ชื่อบัญชีผู้รับเงิน (แสดงใต้ QR Code)
+                </label>
+                <input
+                  type="text"
+                  value={promptPayName}
+                  onChange={(e) => setPromptPayName(e.target.value)}
+                  placeholder="เช่น นาย วิทยา งามเหลือ"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-500">
+                {promptPayNumber ? `ฟอร์แมต: ${formatPromptPayDisplay(promptPayNumber)}` : '*ยังไม่ได้ระบุพร้อมเพย์'}
+              </span>
+              <button
+                type="button"
+                onClick={handleSavePromptPay}
+                disabled={isSavingPromptPay}
+                className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+              >
+                {isSavingPromptPay ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>บันทึกพร้อมเพย์</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons (Excluded from printable bill) */}
-      <div className="no-print print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 mt-3 border-t border-slate-100">
+      <div className="no-print print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 mt-3 border-t border-slate-200">
         <button
           onClick={handlePrint}
           disabled={isExporting !== null}
           title="พิมพ์ผ่านเครื่องพิมพ์ (Print)"
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-sm font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-100 text-sm font-semibold transition-colors disabled:opacity-50 cursor-pointer"
         >
           <Printer className="w-4 h-4" />
           <span>พิมพ์เอกสาร</span>
@@ -769,31 +837,31 @@ export const BillModal: React.FC<BillModalProps> = ({
           <button
             onClick={onClose}
             disabled={isExporting !== null}
-            className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 text-base transition-colors disabled:opacity-50 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 text-sm transition-colors disabled:opacity-50 cursor-pointer"
           >
             ปิด
           </button>
           <button
             onClick={handleSaveImage}
             disabled={isExporting !== null}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 text-base shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 text-sm shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
           >
             {isExporting === 'image' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <ImageIcon className="w-5 h-5" />
+              <ImageIcon className="w-4 h-4" />
             )}
             <span>บันทึกเป็นรูปภาพ</span>
           </button>
           <button
             onClick={handleSavePdf}
             disabled={isExporting !== null}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 text-base shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 text-sm shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
           >
             {isExporting === 'pdf' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <FileDown className="w-5 h-5" />
+              <FileDown className="w-4 h-4" />
             )}
             <span>บันทึกเป็น PDF</span>
           </button>

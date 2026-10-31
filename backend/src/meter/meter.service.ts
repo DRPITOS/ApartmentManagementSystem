@@ -90,11 +90,25 @@ export class MeterService {
 
     // ค่าเช่าห้องฐาน
     const baseRentPrice = dto.baseRentPrice ?? room.basePrice;
-    const commonFee = dto.commonFee ?? (room.apartment.commonFee || 0);
-    const trashFee = dto.trashFee ?? (room.apartment.trashFee || 0);
-    const otherFees = dto.otherFees ?? (room.apartment.defaultOtherFee || 0);
-    const otherFeesNote = dto.otherFeesNote !== undefined ? dto.otherFeesNote : room.apartment.defaultOtherFeeNote;
-    const note = dto.note !== undefined ? dto.note : room.apartment.remarkTemplate;
+    const commonFee = (dto.commonFee !== undefined && dto.commonFee > 0)
+      ? dto.commonFee
+      : (room.apartment.commonFee || 0);
+
+    const trashFee = (dto.trashFee !== undefined && dto.trashFee > 0)
+      ? dto.trashFee
+      : (room.apartment.trashFee || 0);
+
+    const otherFees = (dto.otherFees !== undefined && dto.otherFees > 0)
+      ? dto.otherFees
+      : (room.apartment.defaultOtherFee || 0);
+
+    const otherFeesNote = dto.otherFeesNote !== undefined
+      ? dto.otherFeesNote
+      : (room.apartment.defaultOtherFeeNote || null);
+
+    const note = dto.note !== undefined
+      ? dto.note
+      : (room.apartment.remarkTemplate || null);
 
     const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
 
@@ -125,7 +139,7 @@ export class MeterService {
           commonFee,
           trashFee,
           otherFees,
-          otherFeesNote: otherFeesNote ?? null,
+          otherFeesNote,
           totalAmount,
           status: dto.status || existing.status,
           note: note !== undefined ? note : existing.note,
@@ -152,10 +166,10 @@ export class MeterService {
         commonFee,
         trashFee,
         otherFees,
-        otherFeesNote: otherFeesNote ?? null,
+        otherFeesNote,
         totalAmount,
         status: dto.status || 'UNPAID',
-        note: note ?? null,
+        note,
       },
     });
   }
@@ -249,15 +263,53 @@ export class MeterService {
         baselineWater,
       };
 
-      const readingWithRoom = currentMonthReading
-        ? {
-            ...currentMonthReading,
-            room: {
-              ...roomData,
-              apartment: room.apartment,
-            },
-          }
-        : null;
+      let readingWithRoom = null;
+      if (currentMonthReading) {
+        // Fallback to apartment's fee settings if not recorded or 0
+        const aptCommonFee = room.apartment?.commonFee ?? apartment.commonFee ?? 0;
+        const aptTrashFee = room.apartment?.trashFee ?? apartment.trashFee ?? 0;
+        const aptOtherFee = room.apartment?.defaultOtherFee ?? apartment.defaultOtherFee ?? 0;
+        const aptOtherNote = room.apartment?.defaultOtherFeeNote ?? apartment.defaultOtherFeeNote ?? null;
+        const aptRemarkTemplate = room.apartment?.remarkTemplate ?? apartment.remarkTemplate ?? null;
+
+        const effectiveCommonFee = (currentMonthReading.commonFee && currentMonthReading.commonFee > 0)
+          ? currentMonthReading.commonFee
+          : aptCommonFee;
+
+        const effectiveTrashFee = (currentMonthReading.trashFee && currentMonthReading.trashFee > 0)
+          ? currentMonthReading.trashFee
+          : aptTrashFee;
+
+        const effectiveOtherFees = (currentMonthReading.otherFees && currentMonthReading.otherFees > 0)
+          ? currentMonthReading.otherFees
+          : aptOtherFee;
+
+        const effectiveOtherFeesNote = currentMonthReading.otherFeesNote || aptOtherNote;
+        const effectiveNote = currentMonthReading.note || aptRemarkTemplate;
+
+        const effectiveTotal = Math.round((
+          currentMonthReading.baseRentPrice +
+          currentMonthReading.electricityCost +
+          currentMonthReading.waterCost +
+          effectiveCommonFee +
+          effectiveTrashFee +
+          effectiveOtherFees
+        ) * 100) / 100;
+
+        readingWithRoom = {
+          ...currentMonthReading,
+          commonFee: effectiveCommonFee,
+          trashFee: effectiveTrashFee,
+          otherFees: effectiveOtherFees,
+          otherFeesNote: effectiveOtherFeesNote,
+          note: effectiveNote,
+          totalAmount: effectiveTotal,
+          room: {
+            ...roomData,
+            apartment: room.apartment,
+          },
+        };
+      }
 
       return {
         room: roomData,
@@ -319,7 +371,38 @@ export class MeterService {
     }
 
     await this.apartmentService.validateOwnership(reading.room.apartmentId, ownerId);
-    return reading;
+
+    const apt = reading.room.apartment;
+    const effectiveCommonFee = (reading.commonFee && reading.commonFee > 0)
+      ? reading.commonFee
+      : (apt.commonFee || 0);
+
+    const effectiveTrashFee = (reading.trashFee && reading.trashFee > 0)
+      ? reading.trashFee
+      : (apt.trashFee || 0);
+
+    const effectiveOtherFees = (reading.otherFees && reading.otherFees > 0)
+      ? reading.otherFees
+      : (apt.defaultOtherFee || 0);
+
+    const effectiveTotal = Math.round((
+      reading.baseRentPrice +
+      reading.electricityCost +
+      reading.waterCost +
+      effectiveCommonFee +
+      effectiveTrashFee +
+      effectiveOtherFees
+    ) * 100) / 100;
+
+    return {
+      ...reading,
+      commonFee: effectiveCommonFee,
+      trashFee: effectiveTrashFee,
+      otherFees: effectiveOtherFees,
+      otherFeesNote: reading.otherFeesNote || apt.defaultOtherFeeNote || null,
+      note: reading.note || apt.remarkTemplate || null,
+      totalAmount: effectiveTotal,
+    };
   }
 
   async updateStatus(id: string, status: string, ownerId: string) {
@@ -386,9 +469,9 @@ export class MeterService {
     }
 
     const baseRentPrice = dto.baseRentPrice ?? reading.baseRentPrice;
-    const commonFee = dto.commonFee ?? reading.commonFee;
-    const trashFee = dto.trashFee ?? reading.trashFee;
-    const otherFees = dto.otherFees ?? reading.otherFees;
+    const commonFee = dto.commonFee !== undefined ? dto.commonFee : reading.commonFee;
+    const trashFee = dto.trashFee !== undefined ? dto.trashFee : reading.trashFee;
+    const otherFees = dto.otherFees !== undefined ? dto.otherFees : reading.otherFees;
     const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
 
     return this.prisma.meterReading.update({
@@ -491,11 +574,25 @@ export class MeterService {
       }
 
       const baseRentPrice = item.baseRentPrice ?? room.basePrice;
-      const commonFee = item.commonFee !== undefined ? item.commonFee : (apartment.commonFee || 0);
-      const trashFee = item.trashFee !== undefined ? item.trashFee : (apartment.trashFee || 0);
-      const otherFees = item.otherFees !== undefined ? item.otherFees : (apartment.defaultOtherFee || 0);
-      const otherFeesNote = item.otherFeesNote !== undefined ? item.otherFeesNote : (apartment.defaultOtherFeeNote || null);
-      const note = item.note !== undefined ? item.note : (apartment.remarkTemplate || null);
+      const commonFee = (item.commonFee !== undefined && item.commonFee > 0)
+        ? item.commonFee
+        : (apartment.commonFee || 0);
+
+      const trashFee = (item.trashFee !== undefined && item.trashFee > 0)
+        ? item.trashFee
+        : (apartment.trashFee || 0);
+
+      const otherFees = (item.otherFees !== undefined && item.otherFees > 0)
+        ? item.otherFees
+        : (apartment.defaultOtherFee || 0);
+
+      const otherFeesNote = item.otherFeesNote !== undefined
+        ? item.otherFeesNote
+        : (apartment.defaultOtherFeeNote || null);
+
+      const note = item.note !== undefined
+        ? item.note
+        : (apartment.remarkTemplate || null);
 
       const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
 
@@ -524,7 +621,7 @@ export class MeterService {
             commonFee,
             trashFee,
             otherFees,
-            otherFeesNote: otherFeesNote || null,
+            otherFeesNote,
             totalAmount,
             note: note !== undefined ? note : existing.note,
           },
@@ -549,10 +646,10 @@ export class MeterService {
             commonFee,
             trashFee,
             otherFees,
-            otherFeesNote: otherFeesNote || null,
+            otherFeesNote,
             totalAmount,
             status: 'UNPAID',
-            note: note || null,
+            note,
           },
         });
         results.push(created);
