@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useApartment } from '../contexts/ApartmentContext.js';
 import api from '../services/api.js';
-import type { MeterReading } from '../types/index.js';
+import type { MeterReading, PreviousLeftoverInfo } from '../types/index.js';
 import { MeterReadingSkeleton } from '../components/Skeleton.js';
 import { BillModal } from '../components/BillModal.js';
 
@@ -44,6 +44,7 @@ interface RoomReadingState {
   error?: string | null;
   lastReadingId?: string;
   lastReading?: MeterReading | null;
+  previousLeftover?: PreviousLeftoverInfo | null;
 }
 
 export const MeterReadingPage: React.FC = () => {
@@ -142,6 +143,7 @@ export const MeterReadingPage: React.FC = () => {
             isSaving: false,
             lastReadingId: existingReading.id,
             lastReading: existingReading,
+            previousLeftover: (r as any).previousLeftover || existingReading?.previousLeftover || null,
           });
         } else {
           states.push({
@@ -166,6 +168,7 @@ export const MeterReadingPage: React.FC = () => {
             slipNote: defaultRemarkTemplate,
             isSaved: false,
             isSaving: false,
+            previousLeftover: (r as any).previousLeftover || null,
           });
         }
       }
@@ -413,6 +416,7 @@ export const MeterReadingPage: React.FC = () => {
       otherFees: state.lastReading.otherFees ?? (parseFloat(String(state.otherFees)) || 0),
       otherFeesNote: state.lastReading.otherFeesNote || state.otherFeesNote || selectedApartment?.defaultOtherFeeNote || '',
       note: state.lastReading.note || state.slipNote || selectedApartment?.remarkTemplate || '',
+      previousLeftover: state.previousLeftover || state.lastReading.previousLeftover,
       room: {
         id: state.roomId,
         roomNumber: state.roomNumber,

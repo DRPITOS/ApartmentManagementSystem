@@ -75,8 +75,18 @@ export class UpdateMeterReadingDto {
   otherFeesNote?: string;
 
   @IsOptional()
-  @IsIn(['UNPAID', 'PAID', 'CANCELLED'])
+  @IsIn(['UNPAID', 'PAID', 'PARTIALLY_PAID', 'CANCELLED'])
   status?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  paidAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  paymentRemark?: string;
 
   @IsOptional()
   @IsString()

@@ -65,9 +65,11 @@ export class MeterController {
   updateStatus(
     @Param('id') id: string,
     @Body('status') status: string,
+    @Body('paymentRemark') paymentRemark: string | undefined,
+    @Body('paidAmount') paidAmount: number | undefined,
     @CurrentOwner('id') ownerId: string,
   ) {
-    return this.meterService.updateStatus(id, status, ownerId);
+    return this.meterService.updateStatus(id, status, ownerId, paymentRemark, paidAmount);
   }
 
   @Put(':id')

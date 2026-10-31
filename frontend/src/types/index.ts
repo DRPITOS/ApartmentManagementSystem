@@ -40,6 +40,23 @@ export interface Apartment {
   updatedAt?: string;
 }
 
+export interface PreviousLeftoverItem {
+  readingId: string;
+  billingMonth: string;
+  status: string;
+  totalAmount: number;
+  paidAmount: number;
+  leftoverAmount: number;
+  paymentRemark?: string | null;
+}
+
+export interface PreviousLeftoverInfo {
+  totalLeftoverAmount: number;
+  monthsCount: number;
+  latestMonth: string;
+  items: PreviousLeftoverItem[];
+}
+
 export interface Room {
   id: string;
   apartmentId: string;
@@ -52,6 +69,7 @@ export interface Room {
   initialWater?: number | null;
   tenantName?: string | null;
   tenantPhone?: string | null;
+  previousLeftover?: PreviousLeftoverInfo | null;
   status: 'OCCUPIED' | 'VACANT' | 'MAINTENANCE';
   meterReadings?: MeterReading[];
   createdAt?: string;
@@ -79,9 +97,12 @@ export interface MeterReading {
   otherFees: number;
   otherFeesNote?: string | null;
   totalAmount: number;
-  status: 'UNPAID' | 'PAID' | 'CANCELLED';
+  status: 'UNPAID' | 'PAID' | 'PARTIALLY_PAID' | 'CANCELLED';
   paidAt?: string | null;
+  paidAmount?: number | null;
+  paymentRemark?: string | null;
   note?: string | null; // หมายเหตุบนสลิปสำหรับห้องนี้
+  previousLeftover?: PreviousLeftoverInfo | null;
   room?: Room & { apartment?: Apartment };
 }
 
@@ -96,6 +117,7 @@ export interface ApartmentMonthlyReport {
   totalWaterUnits: number;
   totalRevenue: number;
   paidCount: number;
+  partiallyPaidCount?: number;
   unpaidCount: number;
   items: {
     room: {
@@ -112,6 +134,7 @@ export interface ApartmentMonthlyReport {
       customWaterRate?: number | null;
       baselineElectricity?: number;
       baselineWater?: number;
+      previousLeftover?: PreviousLeftoverInfo | null;
       apartment?: Apartment;
     };
     reading: MeterReading | null;

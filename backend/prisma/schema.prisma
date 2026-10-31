@@ -110,8 +110,10 @@ model MeterReading {
   otherFeesNote        String?   // หมายเหตุค่าใช้จ่ายอื่นๆ
   totalAmount          Float     // รวมยอดทั้งสิ้น
 
-  status               String    @default("UNPAID") // UNPAID, PAID, CANCELLED
+  status               String    @default("UNPAID") // UNPAID, PAID, PARTIALLY_PAID, CANCELLED
   paidAt               DateTime?
+  paidAmount           Float?    // ยอดเงินที่ชำระจริง (กรณีจ่ายบางส่วน)
+  paymentRemark        String?   // บันทึกการชำระเงิน เช่น ธนาคารที่เงินเข้า, ยอดค้างชำระ
   note                 String?   // หมายเหตุบนสลิป/บันทึกช่วยจำสำหรับห้องนี้
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt

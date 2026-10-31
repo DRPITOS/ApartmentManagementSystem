@@ -142,6 +142,9 @@ export class MeterService {
           otherFeesNote,
           totalAmount,
           status: dto.status || existing.status,
+          paidAt: dto.status === 'PAID' ? (existing.paidAt || new Date()) : (dto.status ? null : existing.paidAt),
+          ...(dto.paidAmount !== undefined && { paidAmount: dto.paidAmount }),
+          ...(dto.paymentRemark !== undefined && { paymentRemark: dto.paymentRemark }),
           note: note !== undefined ? note : existing.note,
         },
       });
@@ -169,6 +172,8 @@ export class MeterService {
         otherFeesNote,
         totalAmount,
         status: dto.status || 'UNPAID',
+        paidAmount: dto.paidAmount ?? null,
+        paymentRemark: dto.paymentRemark ?? null,
         note,
       },
     });
@@ -238,6 +243,43 @@ export class MeterService {
       // Find last recorded reading before the current month
       const pastReading = room.meterReadings.find((m) => m.billingMonth < billingMonth);
 
+      // Past unpaid readings before the current billing month
+      const pastUnpaidReadings = room.meterReadings.filter(
+        (m) => m.billingMonth < billingMonth && m.status !== 'PAID' && m.status !== 'CANCELLED'
+      );
+
+      let previousLeftover = null;
+      if (pastUnpaidReadings.length > 0) {
+        const totalPastLeftover = pastUnpaidReadings.reduce((sum, pr) => {
+          const unpaid = pr.status === 'PARTIALLY_PAID'
+            ? Math.max(0, pr.totalAmount - (pr.paidAmount || 0))
+            : pr.totalAmount;
+          return sum + unpaid;
+        }, 0);
+
+        if (totalPastLeftover > 0) {
+          previousLeftover = {
+            totalLeftoverAmount: Math.round(totalPastLeftover * 100) / 100,
+            monthsCount: pastUnpaidReadings.length,
+            latestMonth: pastUnpaidReadings[0].billingMonth,
+            items: pastUnpaidReadings.map((pr) => {
+              const unpaid = pr.status === 'PARTIALLY_PAID'
+                ? Math.max(0, pr.totalAmount - (pr.paidAmount || 0))
+                : pr.totalAmount;
+              return {
+                readingId: pr.id,
+                billingMonth: pr.billingMonth,
+                status: pr.status,
+                totalAmount: pr.totalAmount,
+                paidAmount: pr.paidAmount ?? 0,
+                leftoverAmount: Math.round(unpaid * 100) / 100,
+                paymentRemark: pr.paymentRemark ?? null,
+              };
+            }),
+          };
+        }
+      }
+
       // Determine baseline previous values: either from previous month or room initial meter setting
       const baselineElectricity = pastReading
         ? pastReading.currentElectricity
@@ -261,6 +303,7 @@ export class MeterService {
         customWaterRate: room.customWaterRate,
         baselineElectricity,
         baselineWater,
+        previousLeftover,
       };
 
       let readingWithRoom = null;
@@ -304,6 +347,7 @@ export class MeterService {
           otherFeesNote: effectiveOtherFeesNote,
           note: effectiveNote,
           totalAmount: effectiveTotal,
+          previousLeftover,
           room: {
             ...roomData,
             apartment: room.apartment,
@@ -323,6 +367,7 @@ export class MeterService {
     const totalWaterUnits = recorded.reduce((acc, r) => acc + (r.reading?.waterUnits || 0), 0);
     const totalRevenue = recorded.reduce((acc, r) => acc + (r.reading?.totalAmount || 0), 0);
     const paidCount = recorded.filter((r) => r.reading?.status === 'PAID').length;
+    const partiallyPaidCount = recorded.filter((r) => r.reading?.status === 'PARTIALLY_PAID').length;
     const unpaidCount = recorded.filter((r) => r.reading?.status === 'UNPAID').length;
 
     return {
@@ -336,6 +381,7 @@ export class MeterService {
       totalWaterUnits: Math.round(totalWaterUnits * 100) / 100,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
       paidCount,
+      partiallyPaidCount,
       unpaidCount,
       items: readings,
     };
@@ -394,6 +440,47 @@ export class MeterService {
       effectiveOtherFees
     ) * 100) / 100;
 
+    const pastUnpaidReadings = await this.prisma.meterReading.findMany({
+      where: {
+        roomId: reading.roomId,
+        billingMonth: { lt: reading.billingMonth },
+        status: { in: ['UNPAID', 'PARTIALLY_PAID'] },
+      },
+      orderBy: { billingMonth: 'desc' },
+    });
+
+    let previousLeftover = null;
+    if (pastUnpaidReadings.length > 0) {
+      const totalPastLeftover = pastUnpaidReadings.reduce((sum, pr) => {
+        const unpaid = pr.status === 'PARTIALLY_PAID'
+          ? Math.max(0, pr.totalAmount - (pr.paidAmount || 0))
+          : pr.totalAmount;
+        return sum + unpaid;
+      }, 0);
+
+      if (totalPastLeftover > 0) {
+        previousLeftover = {
+          totalLeftoverAmount: Math.round(totalPastLeftover * 100) / 100,
+          monthsCount: pastUnpaidReadings.length,
+          latestMonth: pastUnpaidReadings[0].billingMonth,
+          items: pastUnpaidReadings.map((pr) => {
+            const unpaid = pr.status === 'PARTIALLY_PAID'
+              ? Math.max(0, pr.totalAmount - (pr.paidAmount || 0))
+              : pr.totalAmount;
+            return {
+              readingId: pr.id,
+              billingMonth: pr.billingMonth,
+              status: pr.status,
+              totalAmount: pr.totalAmount,
+              paidAmount: pr.paidAmount ?? 0,
+              leftoverAmount: Math.round(unpaid * 100) / 100,
+              paymentRemark: pr.paymentRemark ?? null,
+            };
+          }),
+        };
+      }
+    }
+
     return {
       ...reading,
       commonFee: effectiveCommonFee,
@@ -402,10 +489,17 @@ export class MeterService {
       otherFeesNote: reading.otherFeesNote || apt.defaultOtherFeeNote || null,
       note: reading.note || apt.remarkTemplate || null,
       totalAmount: effectiveTotal,
+      previousLeftover,
     };
   }
 
-  async updateStatus(id: string, status: string, ownerId: string) {
+  async updateStatus(
+    id: string,
+    status: string,
+    ownerId: string,
+    paymentRemark?: string,
+    paidAmount?: number,
+  ) {
     const reading = await this.prisma.meterReading.findUnique({
       where: { id },
       include: { room: true },
@@ -421,7 +515,9 @@ export class MeterService {
       where: { id },
       data: {
         status,
-        paidAt: status === 'PAID' ? new Date() : null,
+        paidAt: status === 'PAID' ? (reading.paidAt || new Date()) : null,
+        ...(paymentRemark !== undefined && { paymentRemark }),
+        ...(paidAmount !== undefined && { paidAmount }),
       },
     });
   }
@@ -499,6 +595,8 @@ export class MeterService {
           status: dto.status,
           paidAt: dto.status === 'PAID' ? new Date() : null,
         }),
+        ...(dto.paidAmount !== undefined && { paidAmount: dto.paidAmount }),
+        ...(dto.paymentRemark !== undefined && { paymentRemark: dto.paymentRemark }),
         ...(dto.note !== undefined && { note: dto.note }),
       },
     });
@@ -627,6 +725,9 @@ export class MeterService {
             otherFees,
             otherFeesNote,
             totalAmount,
+            ...(item.status && { status: item.status }),
+            ...(item.paidAmount !== undefined && { paidAmount: item.paidAmount }),
+            ...(item.paymentRemark !== undefined && { paymentRemark: item.paymentRemark }),
             note: note !== undefined ? note : existing.note,
           },
         });
@@ -654,6 +755,8 @@ export class MeterService {
             otherFeesNote,
             totalAmount,
             status: 'UNPAID',
+            paidAmount: item.paidAmount ?? null,
+            paymentRemark: item.paymentRemark ?? null,
             note,
           },
         });

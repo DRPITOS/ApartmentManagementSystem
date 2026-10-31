@@ -78,8 +78,18 @@ export class CreateMeterReadingDto {
   otherFeesNote?: string;
 
   @IsOptional()
-  @IsIn(['UNPAID', 'PAID', 'CANCELLED'], { message: 'สถานะต้องเป็น UNPAID, PAID หรือ CANCELLED' })
+  @IsIn(['UNPAID', 'PAID', 'PARTIALLY_PAID', 'CANCELLED'], { message: 'สถานะต้องเป็น UNPAID, PAID, PARTIALLY_PAID หรือ CANCELLED' })
   status?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'ยอดเงินที่ชำระต้องเป็นตัวเลข' })
+  @Min(0, { message: 'ยอดเงินที่ชำระต้องไม่ติดลบ' })
+  paidAmount?: number;
+
+  @IsOptional()
+  @IsString({ message: 'บันทึกการชำระเงินต้องเป็นข้อความ' })
+  paymentRemark?: string;
 
   @IsOptional()
   @IsString({ message: 'บันทึกช่วยจำต้องเป็นข้อความ' })

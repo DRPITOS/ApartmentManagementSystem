@@ -61,6 +61,19 @@ export class BatchSingleReadingItem {
   @IsOptional()
   @IsString()
   readingDate?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  paidAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  paymentRemark?: string;
 }
 
 export class BatchMeterReadingDto {
