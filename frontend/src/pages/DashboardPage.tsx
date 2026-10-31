@@ -366,7 +366,7 @@ export const DashboardPage: React.FC = () => {
                               {reading.electricityUnits} หน่วย
                             </span>
                             <span className="text-[11px] text-slate-500">
-                              (฿{reading.electricityCost.toLocaleString('th-TH')})
+                              (฿{reading.electricityCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })})
                             </span>
                           </div>
                         ) : (
@@ -381,7 +381,7 @@ export const DashboardPage: React.FC = () => {
                               {reading.waterUnits} หน่วย
                             </span>
                             <span className="text-[11px] text-slate-500">
-                              (฿{reading.waterCost.toLocaleString('th-TH')})
+                              (฿{reading.waterCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })})
                             </span>
                           </div>
                         ) : (
@@ -399,7 +399,7 @@ export const DashboardPage: React.FC = () => {
                         {isRecorded ? (
                           <div className="flex items-baseline gap-1.5 justify-end">
                             <span className="text-base font-black text-indigo-950">
-                              ฿{reading.totalAmount.toLocaleString('th-TH')}
+                              ฿{reading.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                             </span>
                             {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees > 0) && (
                               <span className="text-[10px] text-slate-400">
@@ -463,7 +463,7 @@ export const DashboardPage: React.FC = () => {
                               {reading.electricityUnits} หน่วย
                             </span>
                             <span className="text-sm text-slate-500 block">
-                              (฿{reading.electricityCost.toLocaleString('th-TH')})
+                              (฿{reading.electricityCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })})
                             </span>
                           </div>
                         ) : (
@@ -479,7 +479,7 @@ export const DashboardPage: React.FC = () => {
                               {reading.waterUnits} หน่วย
                             </span>
                             <span className="text-sm text-slate-500 block">
-                              (฿{reading.waterCost.toLocaleString('th-TH')})
+                              (฿{reading.waterCost.toLocaleString('th-TH', { minimumFractionDigits: 2 })})
                             </span>
                           </div>
                         ) : (
@@ -491,7 +491,7 @@ export const DashboardPage: React.FC = () => {
                       <td className="py-4 px-5 text-right font-black text-slate-900 text-xl">
                         {isRecorded ? (
                           <div>
-                            <div>฿{reading.totalAmount.toLocaleString('th-TH')}</div>
+                            <div>฿{reading.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</div>
                             {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees > 0) && (
                               <div className="text-xs text-slate-400 font-normal">
                                 รวมค่าบริการเพิ่มเติม

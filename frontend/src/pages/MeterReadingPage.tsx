@@ -34,9 +34,9 @@ interface RoomReadingState {
   waterRate: number;
   waterBillingType: 'PER_UNIT' | 'FLAT_RATE';
   flatWaterRate: number;
-  commonFee: number;
-  trashFee: number;
-  otherFees: number;
+  commonFee: number | string;
+  trashFee: number | string;
+  otherFees: number | string;
   otherFeesNote: string;
   slipNote: string;
   isSaved: boolean;
@@ -222,9 +222,9 @@ export const MeterReadingPage: React.FC = () => {
     }
 
     const basePrice = parseFloat(String(state.basePrice)) || 0;
-    const commonFee = Number(state.commonFee) || 0;
-    const trashFee = Number(state.trashFee) || 0;
-    const otherFees = Number(state.otherFees) || 0;
+    const commonFee = parseFloat(String(state.commonFee)) || 0;
+    const trashFee = parseFloat(String(state.trashFee)) || 0;
+    const otherFees = parseFloat(String(state.otherFees)) || 0;
     const total = Math.round((basePrice + eCost + wCost + commonFee + trashFee + otherFees) * 100) / 100;
 
     return { eUnits, eCost, wUnits, wCost, basePrice, commonFee, trashFee, otherFees, total, hasCurrE, hasCurrW };
@@ -281,9 +281,9 @@ export const MeterReadingPage: React.FC = () => {
         currentWater: currW,
         waterRate: state.waterRate,
         baseRentPrice: baseP,
-        commonFee: Number(state.commonFee) || 0,
-        trashFee: Number(state.trashFee) || 0,
-        otherFees: Number(state.otherFees) || 0,
+        commonFee: parseFloat(String(state.commonFee)) || 0,
+        trashFee: parseFloat(String(state.trashFee)) || 0,
+        otherFees: parseFloat(String(state.otherFees)) || 0,
         otherFeesNote: state.otherFeesNote.trim() || undefined,
         note: state.slipNote.trim() || undefined,
       });
@@ -366,9 +366,9 @@ export const MeterReadingPage: React.FC = () => {
           previousWater: parseFloat(r.previousWater) || 0,
           currentWater: parseFloat(r.currentWater) || 0,
           baseRentPrice: parseFloat(String(r.basePrice)) || 0,
-          commonFee: Number(r.commonFee) || 0,
-          trashFee: Number(r.trashFee) || 0,
-          otherFees: Number(r.otherFees) || 0,
+          commonFee: parseFloat(String(r.commonFee)) || 0,
+          trashFee: parseFloat(String(r.trashFee)) || 0,
+          otherFees: parseFloat(String(r.otherFees)) || 0,
           otherFeesNote: r.otherFeesNote.trim() || undefined,
           note: r.slipNote.trim() || undefined,
         })),
@@ -391,9 +391,9 @@ export const MeterReadingPage: React.FC = () => {
     if (!state.lastReading) return;
     setActiveBillReading({
       ...state.lastReading,
-      commonFee: (state.lastReading.commonFee && state.lastReading.commonFee > 0) ? state.lastReading.commonFee : (Number(state.commonFee) || selectedApartment?.commonFee || 0),
-      trashFee: (state.lastReading.trashFee && state.lastReading.trashFee > 0) ? state.lastReading.trashFee : (Number(state.trashFee) || selectedApartment?.trashFee || 0),
-      otherFees: state.lastReading.otherFees ?? (Number(state.otherFees) || 0),
+      commonFee: (state.lastReading.commonFee && state.lastReading.commonFee > 0) ? state.lastReading.commonFee : (parseFloat(String(state.commonFee)) || selectedApartment?.commonFee || 0),
+      trashFee: (state.lastReading.trashFee && state.lastReading.trashFee > 0) ? state.lastReading.trashFee : (parseFloat(String(state.trashFee)) || selectedApartment?.trashFee || 0),
+      otherFees: state.lastReading.otherFees ?? (parseFloat(String(state.otherFees)) || 0),
       otherFeesNote: state.lastReading.otherFeesNote || state.otherFeesNote || selectedApartment?.defaultOtherFeeNote || '',
       note: state.lastReading.note || state.slipNote || selectedApartment?.remarkTemplate || '',
       room: {
@@ -627,7 +627,7 @@ export const MeterReadingPage: React.FC = () => {
                         </label>
                         <input
                           type="number"
-                          step="0.1"
+                          step="0.01"
                           min={state.previousElectricity}
                           placeholder={`≥ ${state.previousElectricity}`}
                           value={state.currentElectricity}
@@ -683,7 +683,7 @@ export const MeterReadingPage: React.FC = () => {
                         </label>
                         <input
                           type="number"
-                          step="0.1"
+                          step="0.01"
                           min={state.previousWater}
                           placeholder={`≥ ${state.previousWater}`}
                           value={state.currentWater}
@@ -748,10 +748,11 @@ export const MeterReadingPage: React.FC = () => {
                           </label>
                           <input
                             type="number"
+                            step="0.01"
                             min="0"
                             value={state.commonFee}
                             onChange={(e) =>
-                              handleInputChange(state.roomId, 'commonFee', Number(e.target.value) || 0)
+                              handleInputChange(state.roomId, 'commonFee', e.target.value)
                             }
                             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                           />
@@ -763,10 +764,11 @@ export const MeterReadingPage: React.FC = () => {
                           </label>
                           <input
                             type="number"
+                            step="0.01"
                             min="0"
                             value={state.trashFee}
                             onChange={(e) =>
-                              handleInputChange(state.roomId, 'trashFee', Number(e.target.value) || 0)
+                              handleInputChange(state.roomId, 'trashFee', e.target.value)
                             }
                             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                           />
@@ -778,10 +780,11 @@ export const MeterReadingPage: React.FC = () => {
                           </label>
                           <input
                             type="number"
+                            step="0.01"
                             min="0"
                             value={state.otherFees}
                             onChange={(e) =>
-                              handleInputChange(state.roomId, 'otherFees', Number(e.target.value) || 0)
+                              handleInputChange(state.roomId, 'otherFees', e.target.value)
                             }
                             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                           />

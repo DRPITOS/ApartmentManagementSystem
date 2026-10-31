@@ -504,6 +504,7 @@ export const RoomListPage: React.FC = () => {
           <Input
             label="ราคาค่าเช่าห้องพักต่อเดือน (Base Price)"
             type="number"
+            step="0.01"
             min="0"
             placeholder="3500"
             value={roomForm.basePrice}
@@ -526,7 +527,7 @@ export const RoomListPage: React.FC = () => {
               <Input
                 label="เลขมิเตอร์ไฟเริ่มต้น"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 placeholder="0"
                 value={roomForm.initialElectricity}
@@ -537,7 +538,7 @@ export const RoomListPage: React.FC = () => {
               <Input
                 label="เลขมิเตอร์น้ำเริ่มต้น"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 placeholder="0"
                 value={roomForm.initialWater}
@@ -590,7 +591,7 @@ export const RoomListPage: React.FC = () => {
               <Input
                 label="อัตราค่าไฟเฉพาะห้อง"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 placeholder={String(selectedApartment.defaultElectricityRate)}
                 value={roomForm.customElectricityRate}
@@ -600,7 +601,7 @@ export const RoomListPage: React.FC = () => {
               <Input
                 label="อัตราค่าน้ำเฉพาะห้อง"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 placeholder={String(selectedApartment.defaultWaterRate)}
                 value={roomForm.customWaterRate}
@@ -673,6 +674,7 @@ export const RoomListPage: React.FC = () => {
           <Input
             label="ราคาค่าเช่าห้องต่อเดือน"
             type="number"
+            step="0.01"
             min="0"
             value={batchForm.basePrice}
             onChange={(e) => setBatchForm((p) => ({ ...p, basePrice: e.target.value }))}
@@ -688,7 +690,7 @@ export const RoomListPage: React.FC = () => {
               <Input
                 label="มิเตอร์ไฟตั้งต้น"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 value={batchForm.initialElectricity}
                 onChange={(e) => setBatchForm((p) => ({ ...p, initialElectricity: e.target.value }))}
@@ -697,7 +699,7 @@ export const RoomListPage: React.FC = () => {
               <Input
                 label="มิเตอร์น้ำตั้งต้น"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 value={batchForm.initialWater}
                 onChange={(e) => setBatchForm((p) => ({ ...p, initialWater: e.target.value }))}

@@ -14,9 +14,13 @@ export const Input: React.FC<InputProps> = ({
   unitSuffix,
   className = '',
   id,
+  type,
+  step,
   ...props
 }) => {
   const inputId = id || label.replace(/\s+/g, '-').toLowerCase();
+  // If type is number and no step specified, default to 0.01 to allow 2 decimal places
+  const effectiveStep = type === 'number' && step === undefined ? '0.01' : step;
 
   return (
     <div className="w-full mb-4">
@@ -30,6 +34,8 @@ export const Input: React.FC<InputProps> = ({
       <div className="relative rounded-xl shadow-xs">
         <input
           id={inputId}
+          type={type}
+          step={effectiveStep}
           className={`w-full rounded-xl border bg-white px-4 py-3 text-base sm:text-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
             error
               ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-200'

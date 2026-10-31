@@ -456,7 +456,7 @@ export const ApartmentListPage: React.FC = () => {
               <Input
                 label="ราคาค่าไฟฟ้าต่อหน่วย"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 value={editForm.defaultElectricityRate}
                 onChange={(e) =>
@@ -491,7 +491,7 @@ export const ApartmentListPage: React.FC = () => {
               <Input
                 label="ราคาค่าน้ำต่อหน่วย"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 value={editForm.defaultWaterRate}
                 onChange={(e) =>
@@ -505,6 +505,7 @@ export const ApartmentListPage: React.FC = () => {
               <Input
                 label="ราคาค่าน้ำเหมาจ่ายต่อเดือน"
                 type="number"
+                step="0.01"
                 min="0"
                 value={editForm.flatWaterRate}
                 onChange={(e) =>
@@ -525,6 +526,7 @@ export const ApartmentListPage: React.FC = () => {
                 <Input
                   label="ค่าส่วนกลาง"
                   type="number"
+                  step="0.01"
                   min="0"
                   value={editForm.commonFee}
                   onChange={(e) => setEditForm((p) => ({ ...p, commonFee: e.target.value }))}
@@ -534,6 +536,7 @@ export const ApartmentListPage: React.FC = () => {
                 <Input
                   label="ค่าขยะ"
                   type="number"
+                  step="0.01"
                   min="0"
                   value={editForm.trashFee}
                   onChange={(e) => setEditForm((p) => ({ ...p, trashFee: e.target.value }))}
@@ -545,6 +548,7 @@ export const ApartmentListPage: React.FC = () => {
                 <Input
                   label="ค่าใช้จ่ายอื่นๆ เริ่มต้น"
                   type="number"
+                  step="0.01"
                   min="0"
                   value={editForm.defaultOtherFee}
                   onChange={(e) => setEditForm((p) => ({ ...p, defaultOtherFee: e.target.value }))}
@@ -623,7 +627,7 @@ export const ApartmentListPage: React.FC = () => {
               <Input
                 label="⚡ เลขมิเตอร์ไฟเริ่มต้น (ค่าตั้งต้น)"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 value={editForm.defaultInitialElectricity}
                 onChange={(e) =>
@@ -636,7 +640,7 @@ export const ApartmentListPage: React.FC = () => {
               <Input
                 label="💧 เลขมิเตอร์น้ำเริ่มต้น (ค่าตั้งต้น)"
                 type="number"
-                step="0.1"
+                step="0.01"
                 min="0"
                 value={editForm.defaultInitialWater}
                 onChange={(e) =>
