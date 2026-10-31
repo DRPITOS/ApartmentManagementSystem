@@ -52,6 +52,18 @@ export const apartmentSchema = z.object({
     .number({ message: 'ค่าส่วนกลางต้องเป็นตัวเลข' })
     .min(0, 'ค่าส่วนกลางต้องไม่ติดลบ')
     .optional(),
+  trashFee: z
+    .number({ message: 'ค่าขยะต้องเป็นตัวเลข' })
+    .min(0, 'ค่าขยะต้องไม่ติดลบ')
+    .optional(),
+  defaultOtherFee: z
+    .number({ message: 'ค่าใช้จ่ายอื่นๆ ต้องเป็นตัวเลข' })
+    .min(0, 'ค่าใช้จ่ายอื่นๆ ต้องไม่ติดลบ')
+    .optional(),
+  defaultOtherFeeNote: z.string().optional(),
+  remarkTemplate: z.string().optional(),
+  promptPayNumber: z.string().optional(),
+  promptPayName: z.string().optional(),
   defaultInitialElectricity: z
     .number({ message: 'เลขมิเตอร์ไฟเริ่มต้นต้องเป็นตัวเลข' })
     .min(0, 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ')
@@ -100,8 +112,11 @@ export const meterReadingSchema = z.object({
   previousWater: z.number().min(0, 'เลขมิเตอร์น้ำครั้งก่อนต้องไม่ติดลบ').optional(),
   currentWater: z.number().min(0, 'เลขมิเตอร์น้ำปัจจุบันต้องไม่ติดลบ'),
   baseRentPrice: z.number().min(0, 'ค่าเช่าห้องต้องไม่ติดลบ').optional(),
+  commonFee: z.number().min(0, 'ค่าส่วนกลางต้องไม่ติดลบ').optional(),
+  trashFee: z.number().min(0, 'ค่าขยะต้องไม่ติดลบ').optional(),
   otherFees: z.number().min(0, 'ค่าใช้จ่ายอื่นต้องไม่ติดลบ').optional(),
   otherFeesNote: z.string().optional(),
+  note: z.string().optional(),
 }).refine((data) => data.previousElectricity === undefined || data.currentElectricity >= data.previousElectricity, {
   message: 'เลขมิเตอร์ไฟปัจจุบันต้องไม่น้อยกว่าครั้งก่อน',
   path: ['currentElectricity'],

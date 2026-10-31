@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Calendar,
   RefreshCw,
+  QrCode,
 } from 'lucide-react';
 import { useApartment } from '../contexts/ApartmentContext.js';
 import api from '../services/api.js';
@@ -68,7 +69,10 @@ export const DashboardPage: React.FC = () => {
   const handleOpenBill = (reading: MeterReading, room?: any) => {
     setActiveBillReading({
       ...reading,
-      room: room || reading.room,
+      room: {
+        ...(room || reading.room),
+        apartment: selectedApartment,
+      },
     });
     setIsBillModalOpen(true);
   };
@@ -117,9 +121,19 @@ export const DashboardPage: React.FC = () => {
             </span>
             {selectedApartment.commonFee ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-700 text-sm sm:text-base font-medium">
-                ส่วนกลาง: {selectedApartment.commonFee} บ./ห้อง
+                ส่วนกลาง: {selectedApartment.commonFee} บ.
               </span>
             ) : null}
+            {selectedApartment.trashFee ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-800 text-sm sm:text-base font-medium border border-emerald-200">
+                ค่าขยะ: {selectedApartment.trashFee} บ.
+              </span>
+            ) : null}
+            {selectedApartment.promptPayNumber && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 text-sm sm:text-base font-bold border border-indigo-200">
+                <QrCode className="w-4 h-4 text-indigo-600" /> พร้อมเพย์: {selectedApartment.promptPayNumber}
+              </span>
+            )}
           </div>
         </div>
 
@@ -158,7 +172,7 @@ export const DashboardPage: React.FC = () => {
           <div className="text-2xl sm:text-3xl font-black text-slate-900">
             ฿{(report?.totalRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 0 })}
           </div>
-          <p className="text-sm text-slate-500 mt-1">ค่าเช่า + ค่าน้ำ + ค่าไฟ</p>
+          <p className="text-sm text-slate-500 mt-1">ค่าเช่า + ค่าน้ำ + ค่าไฟ + ค่าบริการ</p>
         </div>
 
         {/* Electricity Consumption */}
@@ -240,7 +254,7 @@ export const DashboardPage: React.FC = () => {
               รายการห้องพักประจำรอบบิล ({report?.items?.length || 0} ห้อง)
             </h3>
             <p className="text-base text-slate-500">
-              แสดงสถานะค่าเช่า ค่าน้ำ ค่าไฟ และยอดรวมที่ต้องชำระ
+              แสดงสถานะค่าเช่า ค่าน้ำ ค่าไฟ ค่าบริการ และยอดรวมที่ต้องชำระ
             </p>
           </div>
           <Link
@@ -278,9 +292,11 @@ export const DashboardPage: React.FC = () => {
                         <div className="font-extrabold text-slate-900 text-lg">
                           ห้อง {room.roomNumber}
                         </div>
-                        {/*<div className="text-sm sm:text-base text-slate-500">*/}
-                        {/*  {room.tenantName ? `ผู้เช่า: ${room.tenantName}` : 'ห้องว่าง (ยังไม่มีผู้เช่า)'}*/}
-                        {/*</div>*/}
+                        {room.tenantName && (
+                          <div className="text-xs text-slate-500">
+                            {room.tenantName}
+                          </div>
+                        )}
                       </td>
 
                       {/* Base Room Rent */}
@@ -323,7 +339,14 @@ export const DashboardPage: React.FC = () => {
                       {/* Total Amount */}
                       <td className="py-4 px-5 text-right font-black text-slate-900 text-xl">
                         {isRecorded ? (
-                          `฿${reading.totalAmount.toLocaleString('th-TH')}`
+                          <div>
+                            <div>฿{reading.totalAmount.toLocaleString('th-TH')}</div>
+                            {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees > 0) && (
+                              <div className="text-xs text-slate-400 font-normal">
+                                รวมค่าบริการเพิ่มเติม
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-slate-400 text-base font-normal">-</span>
                         )}
@@ -372,7 +395,7 @@ export const DashboardPage: React.FC = () => {
                         {isRecorded ? (
                           <button
                             onClick={() => handleOpenBill(reading, room)}
-                            className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-bold text-base transition-colors"
+                            className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-bold text-base transition-colors cursor-pointer"
                           >
                             <Printer className="w-4 h-4" />
                             <span>ดูบิล</span>

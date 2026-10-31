@@ -15,7 +15,13 @@ export interface Apartment {
   defaultWaterRate: number; // บาท / หน่วย
   waterBillingType: 'PER_UNIT' | 'FLAT_RATE';
   flatWaterRate?: number | null;
-  commonFee?: number | null;
+  commonFee?: number | null; // ค่าส่วนกลาง
+  trashFee?: number | null; // ค่าขยะ
+  defaultOtherFee?: number | null; // ค่าใช้จ่ายอื่นๆ เริ่มต้น
+  defaultOtherFeeNote?: string | null; // หมายเหตุค่าใช้จ่ายอื่นๆ เริ่มต้น
+  remarkTemplate?: string | null; // เทมเพลตหมายเหตุท้ายสลิป
+  promptPayNumber?: string | null; // เบอร์หรือเลขพร้อมเพย์
+  promptPayName?: string | null; // ชื่อบัญชีพร้อมเพย์
   defaultInitialElectricity?: number | null;
   defaultInitialWater?: number | null;
   role?: string;
@@ -68,17 +74,20 @@ export interface MeterReading {
   waterRate: number;
   waterCost: number;
   baseRentPrice: number;
+  commonFee: number;
+  trashFee: number;
   otherFees: number;
   otherFeesNote?: string | null;
   totalAmount: number;
   status: 'UNPAID' | 'PAID' | 'CANCELLED';
   paidAt?: string | null;
-  note?: string | null;
+  note?: string | null; // หมายเหตุบนสลิปสำหรับห้องนี้
   room?: Room & { apartment?: Apartment };
 }
 
 export interface ApartmentMonthlyReport {
   apartmentId: string;
+  apartment?: Apartment;
   billingMonth: string;
   totalRooms: number;
   recordedRooms: number;
@@ -103,6 +112,7 @@ export interface ApartmentMonthlyReport {
       customWaterRate?: number | null;
       baselineElectricity?: number;
       baselineWater?: number;
+      apartment?: Apartment;
     };
     reading: MeterReading | null;
   }[];

@@ -36,11 +36,27 @@ export class BatchSingleReadingItem {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  commonFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  trashFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   otherFees?: number;
 
   @IsOptional()
   @IsString()
   otherFeesNote?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 export class BatchMeterReadingDto {

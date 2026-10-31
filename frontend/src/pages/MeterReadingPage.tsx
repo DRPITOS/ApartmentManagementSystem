@@ -8,11 +8,16 @@ import {
   Calendar,
   AlertCircle,
   Check,
+  ChevronDown,
+  ChevronUp,
+  Receipt,
+  FileText,
 } from 'lucide-react';
 import { useApartment } from '../contexts/ApartmentContext.js';
 import api from '../services/api.js';
 import type { MeterReading } from '../types/index.js';
 import { MeterReadingSkeleton } from '../components/Skeleton.js';
+import { BillModal } from '../components/BillModal.js';
 
 interface RoomReadingState {
   roomId: string;
@@ -20,6 +25,7 @@ interface RoomReadingState {
   floor: number | null;
   basePrice: number;
   tenantName: string | null;
+  tenantPhone: string | null;
   previousElectricity: string;
   currentElectricity: string;
   electricityRate: number;
@@ -29,10 +35,15 @@ interface RoomReadingState {
   waterBillingType: 'PER_UNIT' | 'FLAT_RATE';
   flatWaterRate: number;
   commonFee: number;
+  trashFee: number;
+  otherFees: number;
+  otherFeesNote: string;
+  slipNote: string;
   isSaved: boolean;
   isSaving: boolean;
   error?: string | null;
   lastReadingId?: string;
+  lastReading?: MeterReading | null;
 }
 
 export const MeterReadingPage: React.FC = () => {
@@ -52,6 +63,11 @@ export const MeterReadingPage: React.FC = () => {
   const [roomStates, setRoomStates] = useState<RoomReadingState[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [globalMessage, setGlobalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [expandedFeesRoomIds, setExpandedFeesRoomIds] = useState<Record<string, boolean>>({});
+
+  // Bill modal for instant preview
+  const [activeBillReading, setActiveBillReading] = useState<MeterReading | null>(null);
+  const [isBillModalOpen, setIsBillModalOpen] = useState(false);
 
   // Load rooms and previous/current readings
   const loadData = async () => {
@@ -78,7 +94,11 @@ export const MeterReadingPage: React.FC = () => {
           r.customWaterRate ?? selectedApartment.defaultWaterRate ?? 18.0;
         const waterBillingType = selectedApartment.waterBillingType || 'PER_UNIT';
         const flatWaterRate = selectedApartment.flatWaterRate ?? 100;
-        const commonFee = selectedApartment.commonFee ?? 0;
+        const defaultCommonFee = selectedApartment.commonFee ?? 0;
+        const defaultTrashFee = selectedApartment.trashFee ?? 0;
+        const defaultOtherFee = selectedApartment.defaultOtherFee ?? 0;
+        const defaultOtherFeeNote = selectedApartment.defaultOtherFeeNote ?? '';
+        const defaultRemarkTemplate = selectedApartment.remarkTemplate ?? '';
 
         // Baseline numbers from previous record or room initial meter setting
         const baselineElec = String(r.baselineElectricity ?? r.initialElectricity ?? 0);
@@ -91,6 +111,7 @@ export const MeterReadingPage: React.FC = () => {
             floor: r.floor ?? 1,
             basePrice: existingReading.baseRentPrice ?? r.basePrice,
             tenantName: r.tenantName ?? null,
+            tenantPhone: r.tenantPhone ?? null,
             previousElectricity: String(existingReading.previousElectricity),
             currentElectricity: String(existingReading.currentElectricity),
             electricityRate: existingReading.electricityRate ?? electricityRate,
@@ -99,10 +120,15 @@ export const MeterReadingPage: React.FC = () => {
             waterRate: existingReading.waterRate ?? waterRate,
             waterBillingType,
             flatWaterRate,
-            commonFee,
+            commonFee: existingReading.commonFee ?? defaultCommonFee,
+            trashFee: existingReading.trashFee ?? defaultTrashFee,
+            otherFees: existingReading.otherFees ?? defaultOtherFee,
+            otherFeesNote: existingReading.otherFeesNote ?? defaultOtherFeeNote,
+            slipNote: existingReading.note ?? defaultRemarkTemplate,
             isSaved: true,
             isSaving: false,
             lastReadingId: existingReading.id,
+            lastReading: existingReading,
           });
         } else {
           states.push({
@@ -111,6 +137,7 @@ export const MeterReadingPage: React.FC = () => {
             floor: r.floor ?? 1,
             basePrice: r.basePrice,
             tenantName: r.tenantName ?? null,
+            tenantPhone: r.tenantPhone ?? null,
             previousElectricity: baselineElec,
             currentElectricity: '', // Let user put only the new number!
             electricityRate,
@@ -119,7 +146,11 @@ export const MeterReadingPage: React.FC = () => {
             waterRate,
             waterBillingType,
             flatWaterRate,
-            commonFee,
+            commonFee: defaultCommonFee,
+            trashFee: defaultTrashFee,
+            otherFees: defaultOtherFee,
+            otherFeesNote: defaultOtherFeeNote,
+            slipNote: defaultRemarkTemplate,
             isSaved: false,
             isSaving: false,
           });
@@ -147,8 +178,8 @@ export const MeterReadingPage: React.FC = () => {
 
   const handleInputChange = (
     roomId: string,
-    field: 'currentElectricity' | 'currentWater' | 'basePrice',
-    value: string,
+    field: keyof RoomReadingState,
+    value: any,
   ) => {
     setRoomStates((prev) =>
       prev.map((item) => {
@@ -161,6 +192,13 @@ export const MeterReadingPage: React.FC = () => {
         };
       }),
     );
+  };
+
+  const toggleFeesExpanded = (roomId: string) => {
+    setExpandedFeesRoomIds((prev) => ({
+      ...prev,
+      [roomId]: !prev[roomId],
+    }));
   };
 
   // Calculation helpers
@@ -184,10 +222,12 @@ export const MeterReadingPage: React.FC = () => {
     }
 
     const basePrice = parseFloat(String(state.basePrice)) || 0;
-    const commonFee = state.commonFee || 0;
-    const total = Math.round((basePrice + eCost + wCost + commonFee) * 100) / 100;
+    const commonFee = Number(state.commonFee) || 0;
+    const trashFee = Number(state.trashFee) || 0;
+    const otherFees = Number(state.otherFees) || 0;
+    const total = Math.round((basePrice + eCost + wCost + commonFee + trashFee + otherFees) * 100) / 100;
 
-    return { eUnits, eCost, wUnits, wCost, basePrice, commonFee, total, hasCurrE, hasCurrW };
+    return { eUnits, eCost, wUnits, wCost, basePrice, commonFee, trashFee, otherFees, total, hasCurrE, hasCurrW };
   };
 
   // Single room save
@@ -241,8 +281,11 @@ export const MeterReadingPage: React.FC = () => {
         currentWater: currW,
         waterRate: state.waterRate,
         baseRentPrice: baseP,
-        otherFees: state.commonFee,
-        otherFeesNote: state.commonFee > 0 ? 'ค่าส่วนกลาง' : undefined,
+        commonFee: Number(state.commonFee) || 0,
+        trashFee: Number(state.trashFee) || 0,
+        otherFees: Number(state.otherFees) || 0,
+        otherFeesNote: state.otherFeesNote.trim() || undefined,
+        note: state.slipNote.trim() || undefined,
       });
 
       setRoomStates((prev) =>
@@ -253,6 +296,7 @@ export const MeterReadingPage: React.FC = () => {
                 isSaving: false,
                 isSaved: true,
                 lastReadingId: res.data.id,
+                lastReading: res.data,
                 error: null,
               }
             : r,
@@ -322,8 +366,11 @@ export const MeterReadingPage: React.FC = () => {
           previousWater: parseFloat(r.previousWater) || 0,
           currentWater: parseFloat(r.currentWater) || 0,
           baseRentPrice: parseFloat(String(r.basePrice)) || 0,
-          otherFees: r.commonFee || 0,
-          otherFeesNote: r.commonFee > 0 ? 'ค่าส่วนกลาง' : undefined,
+          commonFee: Number(r.commonFee) || 0,
+          trashFee: Number(r.trashFee) || 0,
+          otherFees: Number(r.otherFees) || 0,
+          otherFeesNote: r.otherFeesNote.trim() || undefined,
+          note: r.slipNote.trim() || undefined,
         })),
       };
 
@@ -338,6 +385,25 @@ export const MeterReadingPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOpenSlip = (state: RoomReadingState) => {
+    if (!state.lastReading) return;
+    setActiveBillReading({
+      ...state.lastReading,
+      room: {
+        id: state.roomId,
+        roomNumber: state.roomNumber,
+        floor: state.floor,
+        basePrice: state.basePrice,
+        tenantName: state.tenantName,
+        tenantPhone: state.tenantPhone,
+        apartmentId: selectedApartment?.id || '',
+        status: 'OCCUPIED',
+        apartment: selectedApartment || undefined,
+      },
+    });
+    setIsBillModalOpen(true);
   };
 
   if ((isApartmentLoading && !selectedApartment) || (isLoading && roomStates.length === 0)) {
@@ -367,12 +433,24 @@ export const MeterReadingPage: React.FC = () => {
           </div>
           <p className="text-base text-slate-600 mt-1">
             หอพัก: <strong className="text-slate-900">{selectedApartment.name}</strong>
-            {selectedApartment.nickname ? ` (${selectedApartment.nickname})` : ''} — กรอกเฉพาะเลขมิเตอร์ใหม่ ระบบจะดึงเลขครั้งก่อนมาคำนวณให้อัตโนมัติ
+            {selectedApartment.nickname ? ` (${selectedApartment.nickname})` : ''} — กรอกเลขมิเตอร์ใหม่ พร้อมกำหนดค่าขยะ ส่วนกลาง ค่าอื่นๆ และหมายเหตุบนสลิปได้
           </p>
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-sm sm:text-base text-slate-600">
-            <span>⚡ อัตราไฟ: <strong>{selectedApartment.defaultElectricityRate} บ./หน่วย</strong></span>
+          <div className="flex flex-wrap items-center gap-2.5 mt-2 text-sm sm:text-base text-slate-600">
+            <span>⚡ ไฟ: <strong>{selectedApartment.defaultElectricityRate} บ./หน่วย</strong></span>
             <span>•</span>
-            <span>💧 อัตราน้ำ: <strong>{selectedApartment.waterBillingType === 'FLAT_RATE' ? `เหมาจ่าย ${selectedApartment.flatWaterRate} บ./ด.` : `${selectedApartment.defaultWaterRate} บ./หน่วย`}</strong></span>
+            <span>💧 น้ำ: <strong>{selectedApartment.waterBillingType === 'FLAT_RATE' ? `เหมาจ่าย ${selectedApartment.flatWaterRate} บ./ด.` : `${selectedApartment.defaultWaterRate} บ./หน่วย`}</strong></span>
+            {selectedApartment.commonFee ? (
+              <>
+                <span>•</span>
+                <span>ส่วนกลาง: <strong>{selectedApartment.commonFee} บ.</strong></span>
+              </>
+            ) : null}
+            {selectedApartment.trashFee ? (
+              <>
+                <span>•</span>
+                <span>ขยะ: <strong>{selectedApartment.trashFee} บ.</strong></span>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -422,7 +500,7 @@ export const MeterReadingPage: React.FC = () => {
         <Zap className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
         <div>
           <strong className="block text-lg font-bold">✨ สะดวกขึ้น: กรอกเฉพาะ "เลขมิเตอร์ใหม่" ของเดือนนี้!</strong>
-          ระบบจะดึงเลขครั้งก่อนหน้าจากฐานข้อมูล (หรือเลขตั้งต้นตอนเพิ่มห้องพัก) มาเปรียบเทียบและคำนวณจำนวนหน่วยและยอดเงินให้อัตโนมัติทันที
+          ระบบจะดึงเลขครั้งก่อนมาคำนวณให้อัตโนมัติ พร้อมดึงเทมเพลตค่าขยะ ส่วนกลาง ค่าอื่นๆ และหมายเหตุบนสลิปของหอพักมาให้ และสามารถปรับแก้รายห้องได้ทันที
         </div>
       </div>
 
@@ -430,7 +508,9 @@ export const MeterReadingPage: React.FC = () => {
       {roomStates.length > 0 ? (
         <div className="space-y-4">
           {roomStates.map((state) => {
-            const { eUnits, eCost, wUnits, wCost, basePrice, total } = calculateRoom(state);
+            const { eUnits, eCost, wUnits, wCost, basePrice, commonFee, trashFee, otherFees, total } =
+              calculateRoom(state);
+            const isFeesExpanded = expandedFeesRoomIds[state.roomId] || false;
 
             return (
               <div
@@ -470,8 +550,19 @@ export const MeterReadingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Single Save Button */}
-                  <div className="flex items-center gap-3 self-end sm:self-auto">
+                  {/* Actions: View Slip & Single Save Button */}
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {state.isSaved && state.lastReading && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSlip(state)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-base font-bold transition-all shadow-xs"
+                      >
+                        <Receipt className="w-4 h-4" />
+                        <span>ดูสลิปบิล</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => handleSaveSingleRoom(state.roomId)}
@@ -626,25 +717,154 @@ export const MeterReadingPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Additional Fees & Remarks Dropdown/Accordion */}
+                <div className="mt-4 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => toggleFeesExpanded(state.roomId)}
+                    className="flex items-center justify-between w-full p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm sm:text-base transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-600" />
+                      <span>
+                        ค่าขยะ, ส่วนกลาง, ค่าใช้จ่ายอื่นๆ และหมายเหตุบนสลิป
+                      </span>
+                      {(commonFee > 0 || trashFee > 0 || otherFees > 0 || state.slipNote) && (
+                        <span className="text-xs font-semibold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
+                          มีรายการเพิ่มเติม
+                        </span>
+                      )}
+                    </div>
+                    {isFeesExpanded ? (
+                      <ChevronUp className="w-5 h-5 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-slate-400" />
+                    )}
+                  </button>
+
+                  {isFeesExpanded && (
+                    <div className="mt-3 p-4 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-4">
+                      {/* Fees row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            ค่าส่วนกลาง (บาท)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={state.commonFee}
+                            onChange={(e) =>
+                              handleInputChange(state.roomId, 'commonFee', Number(e.target.value) || 0)
+                            }
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            ค่าขยะ (บาท)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={state.trashFee}
+                            onChange={(e) =>
+                              handleInputChange(state.roomId, 'trashFee', Number(e.target.value) || 0)
+                            }
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            ค่าใช้จ่ายอื่นๆ (บาท)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={state.otherFees}
+                            onChange={(e) =>
+                              handleInputChange(state.roomId, 'otherFees', Number(e.target.value) || 0)
+                            }
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Remarks for other fees */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          หมายเหตุสำหรับค่าใช้จ่ายอื่นๆ (จะแสดงในรายการบิล)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="เช่น ค่าที่จอดรถ, ค่าล้างแอร์, ค่าคีย์การ์ด"
+                          value={state.otherFeesNote}
+                          onChange={(e) =>
+                            handleInputChange(state.roomId, 'otherFeesNote', e.target.value)
+                          }
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+
+                      {/* Slip Remarks for room */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          หมายเหตุบนสลิปสำหรับห้องนี้ (Remarks on Slip)
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="ข้อความหมายเหตุที่จะพิมพ์ลงบนสลิปของห้องนี้ เช่น ชำระเงินก่อนวันที่ 5"
+                          value={state.slipNote}
+                          onChange={(e) =>
+                            handleInputChange(state.roomId, 'slipNote', e.target.value)
+                          }
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          *ดึงมาจากเทมเพลตของหอพักเริ่มต้น สามารถพิมพ์เพิ่มเติมหรือแก้ไขเฉพาะห้องนี้ได้
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Total Summary Footer for Room */}
                 <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50 -mx-5 -mb-5 sm:-mx-7 sm:-mb-7 p-4 sm:p-5 rounded-b-3xl">
-                  <div className="flex flex-wrap items-center gap-4 text-base text-slate-700">
+                  <div className="flex flex-wrap items-center gap-3 text-sm sm:text-base text-slate-700">
                     <span>
-                      ค่าเช่าห้อง: <strong>฿{basePrice.toLocaleString('th-TH')}</strong>
+                      ห้อง: <strong>฿{basePrice.toLocaleString('th-TH')}</strong>
                     </span>
                     <span>+</span>
                     <span>
-                      ค่าไฟ: <strong>฿{eCost.toLocaleString('th-TH')}</strong>
+                      ไฟ: <strong>฿{eCost.toLocaleString('th-TH')}</strong>
                     </span>
                     <span>+</span>
                     <span>
-                      ค่าน้ำ: <strong>฿{wCost.toLocaleString('th-TH')}</strong>
+                      น้ำ: <strong>฿{wCost.toLocaleString('th-TH')}</strong>
                     </span>
-                    {state.commonFee > 0 && (
+                    {commonFee > 0 && (
                       <>
                         <span>+</span>
                         <span>
-                          ส่วนกลาง: <strong>฿{state.commonFee}</strong>
+                          ส่วนกลาง: <strong>฿{commonFee}</strong>
+                        </span>
+                      </>
+                    )}
+                    {trashFee > 0 && (
+                      <>
+                        <span>+</span>
+                        <span>
+                          ขยะ: <strong>฿{trashFee}</strong>
+                        </span>
+                      </>
+                    )}
+                    {otherFees > 0 && (
+                      <>
+                        <span>+</span>
+                        <span>
+                          อื่นๆ: <strong>฿{otherFees}</strong>
                         </span>
                       </>
                     )}
@@ -666,6 +886,15 @@ export const MeterReadingPage: React.FC = () => {
           <p className="text-xl text-slate-500">ยังไม่มีห้องพักในหอพักนี้</p>
         </div>
       )}
+
+      {/* Bill Preview Modal */}
+      <BillModal
+        isOpen={isBillModalOpen}
+        onClose={() => setIsBillModalOpen(false)}
+        reading={activeBillReading}
+        apartmentName={selectedApartment.name}
+        apartmentNickname={selectedApartment.nickname}
+      />
     </div>
   );
 };

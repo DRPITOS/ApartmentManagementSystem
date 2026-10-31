@@ -52,6 +52,18 @@ export class UpdateMeterReadingDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  commonFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  trashFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   otherFees?: number;
 
   @IsOptional()

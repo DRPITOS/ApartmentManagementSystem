@@ -90,9 +90,13 @@ export class MeterService {
 
     // ค่าเช่าห้องฐาน
     const baseRentPrice = dto.baseRentPrice ?? room.basePrice;
-    const otherFees = dto.otherFees ?? (room.apartment.commonFee || 0);
+    const commonFee = dto.commonFee ?? (room.apartment.commonFee || 0);
+    const trashFee = dto.trashFee ?? (room.apartment.trashFee || 0);
+    const otherFees = dto.otherFees ?? (room.apartment.defaultOtherFee || 0);
+    const otherFeesNote = dto.otherFeesNote !== undefined ? dto.otherFeesNote : room.apartment.defaultOtherFeeNote;
+    const note = dto.note !== undefined ? dto.note : room.apartment.remarkTemplate;
 
-    const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + otherFees) * 100) / 100;
+    const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
 
     // ตรวจสอบว่าเคยมีบันทึกของเดือนนี้หรือยัง หากมีให้ update หากไม่มีให้ create
     const existing = await this.prisma.meterReading.findFirst({
@@ -118,11 +122,13 @@ export class MeterService {
           waterRate,
           waterCost,
           baseRentPrice,
+          commonFee,
+          trashFee,
           otherFees,
-          otherFeesNote: dto.otherFeesNote ?? null,
+          otherFeesNote: otherFeesNote ?? null,
           totalAmount,
           status: dto.status || existing.status,
-          note: dto.note ?? existing.note,
+          note: note !== undefined ? note : existing.note,
         },
       });
     }
@@ -143,11 +149,13 @@ export class MeterService {
         waterRate,
         waterCost,
         baseRentPrice,
+        commonFee,
+        trashFee,
         otherFees,
-        otherFeesNote: dto.otherFeesNote ?? null,
+        otherFeesNote: otherFeesNote ?? null,
         totalAmount,
         status: dto.status || 'UNPAID',
-        note: dto.note ?? null,
+        note: note ?? null,
       },
     });
   }
@@ -176,6 +184,13 @@ export class MeterService {
       defaultWaterRate: room.customWaterRate ?? room.apartment.defaultWaterRate,
       waterBillingType: room.apartment.waterBillingType,
       flatWaterRate: room.apartment.flatWaterRate,
+      commonFee: room.apartment.commonFee ?? 0,
+      trashFee: room.apartment.trashFee ?? 0,
+      defaultOtherFee: room.apartment.defaultOtherFee ?? 0,
+      defaultOtherFeeNote: room.apartment.defaultOtherFeeNote,
+      remarkTemplate: room.apartment.remarkTemplate,
+      promptPayNumber: room.apartment.promptPayNumber,
+      promptPayName: room.apartment.promptPayName,
       baseRentPrice: room.basePrice,
     };
   }
@@ -183,10 +198,19 @@ export class MeterService {
   async findByApartmentAndMonth(apartmentId: string, billingMonth: string, ownerId: string) {
     await this.apartmentService.validateOwnership(apartmentId, ownerId);
 
+    const apartment = await this.prisma.apartment.findUnique({
+      where: { id: apartmentId },
+    });
+
+    if (!apartment) {
+      throw new NotFoundException('ไม่พบข้อมูลหอพักนี้');
+    }
+
     const rooms = await this.prisma.room.findMany({
       where: { apartmentId },
       orderBy: [{ floor: 'asc' }, { roomNumber: 'asc' }],
       include: {
+        apartment: true,
         meterReadings: {
           orderBy: { billingMonth: 'desc' },
         },
@@ -228,7 +252,10 @@ export class MeterService {
       const readingWithRoom = currentMonthReading
         ? {
             ...currentMonthReading,
-            room: roomData,
+            room: {
+              ...roomData,
+              apartment: room.apartment,
+            },
           }
         : null;
 
@@ -248,6 +275,7 @@ export class MeterService {
 
     return {
       apartmentId,
+      apartment,
       billingMonth,
       totalRooms: rooms.length,
       recordedRooms: recorded.length,
@@ -358,8 +386,10 @@ export class MeterService {
     }
 
     const baseRentPrice = dto.baseRentPrice ?? reading.baseRentPrice;
+    const commonFee = dto.commonFee ?? reading.commonFee;
+    const trashFee = dto.trashFee ?? reading.trashFee;
     const otherFees = dto.otherFees ?? reading.otherFees;
-    const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + otherFees) * 100) / 100;
+    const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
 
     return this.prisma.meterReading.update({
       where: { id },
@@ -376,6 +406,8 @@ export class MeterService {
         waterRate,
         waterCost,
         baseRentPrice,
+        commonFee,
+        trashFee,
         otherFees,
         ...(dto.otherFeesNote !== undefined && { otherFeesNote: dto.otherFeesNote }),
         totalAmount,
@@ -459,8 +491,13 @@ export class MeterService {
       }
 
       const baseRentPrice = item.baseRentPrice ?? room.basePrice;
-      const otherFees = item.otherFees ?? (apartment.commonFee || 0);
-      const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + otherFees) * 100) / 100;
+      const commonFee = item.commonFee !== undefined ? item.commonFee : (apartment.commonFee || 0);
+      const trashFee = item.trashFee !== undefined ? item.trashFee : (apartment.trashFee || 0);
+      const otherFees = item.otherFees !== undefined ? item.otherFees : (apartment.defaultOtherFee || 0);
+      const otherFeesNote = item.otherFeesNote !== undefined ? item.otherFeesNote : (apartment.defaultOtherFeeNote || null);
+      const note = item.note !== undefined ? item.note : (apartment.remarkTemplate || null);
+
+      const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
 
       const existing = await this.prisma.meterReading.findFirst({
         where: {
@@ -484,9 +521,12 @@ export class MeterService {
             waterRate,
             waterCost,
             baseRentPrice,
+            commonFee,
+            trashFee,
             otherFees,
-            otherFeesNote: item.otherFeesNote || null,
+            otherFeesNote: otherFeesNote || null,
             totalAmount,
+            note: note !== undefined ? note : existing.note,
           },
         });
         results.push(updated);
@@ -506,10 +546,13 @@ export class MeterService {
             waterRate,
             waterCost,
             baseRentPrice,
+            commonFee,
+            trashFee,
             otherFees,
-            otherFeesNote: item.otherFeesNote || null,
+            otherFeesNote: otherFeesNote || null,
             totalAmount,
             status: 'UNPAID',
+            note: note || null,
           },
         });
         results.push(created);

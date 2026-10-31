@@ -44,6 +44,34 @@ export class UpdateApartmentDto {
 
   @IsOptional()
   @Type(() => Number)
+  @IsNumber({}, { message: 'ค่าขยะต้องเป็นตัวเลข (Trash fee must be a number)' })
+  @Min(0, { message: 'ค่าขยะต้องไม่ติดลบ (Trash fee cannot be negative)' })
+  trashFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'ค่าใช้จ่ายอื่นๆ เริ่มต้นต้องเป็นตัวเลข' })
+  @Min(0, { message: 'ค่าใช้จ่ายอื่นๆ เริ่มต้นต้องไม่ติดลบ' })
+  defaultOtherFee?: number;
+
+  @IsOptional()
+  @IsString({ message: 'หมายเหตุค่าใช้จ่ายอื่นๆ ต้องเป็นข้อความ' })
+  defaultOtherFeeNote?: string;
+
+  @IsOptional()
+  @IsString({ message: 'เทมเพลตหมายเหตุท้ายสลิปต้องเป็นข้อความ' })
+  remarkTemplate?: string;
+
+  @IsOptional()
+  @IsString({ message: 'หมายเลขพร้อมเพย์ต้องเป็นข้อความ' })
+  promptPayNumber?: string;
+
+  @IsOptional()
+  @IsString({ message: 'ชื่อบัญชีพร้อมเพย์ต้องเป็นข้อความ' })
+  promptPayName?: string;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber({}, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องเป็นตัวเลข (Default initial electricity must be a number)' })
   @Min(0, { message: 'เลขมิเตอร์ไฟเริ่มต้นต้องไม่ติดลบ (Default initial electricity cannot be negative)' })
   defaultInitialElectricity?: number;

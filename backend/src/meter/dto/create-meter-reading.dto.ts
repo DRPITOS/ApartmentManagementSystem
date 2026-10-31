@@ -57,6 +57,18 @@ export class CreateMeterReadingDto {
 
   @IsOptional()
   @Type(() => Number)
+  @IsNumber({}, { message: 'ค่าส่วนกลางต้องเป็นตัวเลข' })
+  @Min(0, { message: 'ค่าส่วนกลางต้องไม่ติดลบ' })
+  commonFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'ค่าขยะต้องเป็นตัวเลข' })
+  @Min(0, { message: 'ค่าขยะต้องไม่ติดลบ' })
+  trashFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber({}, { message: 'ค่าใช้จ่ายเพิ่มเติมต้องเป็นตัวเลข' })
   @Min(0, { message: 'ค่าใช้จ่ายเพิ่มเติมต้องไม่ติดลบ' })
   otherFees?: number;

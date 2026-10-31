@@ -4,6 +4,7 @@ import { Input } from './Input.js';
 import api from '../services/api.js';
 import { useApartment } from '../contexts/ApartmentContext.js';
 import { apartmentSchema } from '../utils/validation.js';
+import { QrCode, FileText } from 'lucide-react';
 
 interface CreateApartmentModalProps {
   isOpen: boolean;
@@ -25,6 +26,12 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
     waterBillingType: 'PER_UNIT' as 'PER_UNIT' | 'FLAT_RATE',
     flatWaterRate: '100',
     commonFee: '0',
+    trashFee: '0',
+    defaultOtherFee: '0',
+    defaultOtherFeeNote: '',
+    remarkTemplate: 'กรุณาชำระเงินก่อนวันที่ 5 ของทุกเดือน ขอบคุณครับ',
+    promptPayNumber: '',
+    promptPayName: '',
     defaultInitialElectricity: '0',
     defaultInitialWater: '0',
   });
@@ -33,7 +40,9 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
@@ -45,7 +54,6 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
     e.preventDefault();
     setServerError(null);
 
-    // Front-end syntax & validation checking before sending to back-end
     const parsedData = {
       name: formData.name.trim(),
       nickname: formData.nickname.trim() || undefined,
@@ -55,6 +63,12 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
       waterBillingType: formData.waterBillingType,
       flatWaterRate: formData.waterBillingType === 'FLAT_RATE' ? Number(formData.flatWaterRate) : undefined,
       commonFee: Number(formData.commonFee || 0),
+      trashFee: Number(formData.trashFee || 0),
+      defaultOtherFee: Number(formData.defaultOtherFee || 0),
+      defaultOtherFeeNote: formData.defaultOtherFeeNote.trim() || undefined,
+      remarkTemplate: formData.remarkTemplate.trim() || undefined,
+      promptPayNumber: formData.promptPayNumber.trim() || undefined,
+      promptPayName: formData.promptPayName.trim() || undefined,
       defaultInitialElectricity: formData.defaultInitialElectricity !== '' ? Number(formData.defaultInitialElectricity) : 0,
       defaultInitialWater: formData.defaultInitialWater !== '' ? Number(formData.defaultInitialWater) : 0,
     };
@@ -86,6 +100,12 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
         waterBillingType: 'PER_UNIT',
         flatWaterRate: '100',
         commonFee: '0',
+        trashFee: '0',
+        defaultOtherFee: '0',
+        defaultOtherFeeNote: '',
+        remarkTemplate: 'กรุณาชำระเงินก่อนวันที่ 5 ของทุกเดือน ขอบคุณครับ',
+        promptPayNumber: '',
+        promptPayName: '',
         defaultInitialElectricity: '0',
         defaultInitialWater: '0',
       });
@@ -175,47 +195,137 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {formData.waterBillingType === 'PER_UNIT' ? (
-              <Input
-                label="ราคาค่าน้ำต่อหน่วย"
-                name="defaultWaterRate"
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="18.0"
-                value={formData.defaultWaterRate}
-                onChange={handleChange}
-                error={errors.defaultWaterRate}
-                unitSuffix="บาท/หน่วย"
-                required
-              />
-            ) : (
-              <Input
-                label="ราคาค่าน้ำเหมาจ่ายต่อเดือน"
-                name="flatWaterRate"
-                type="number"
-                min="0"
-                placeholder="100"
-                value={formData.flatWaterRate}
-                onChange={handleChange}
-                error={errors.flatWaterRate}
-                unitSuffix="บาท/เดือน"
-                required
-              />
-            )}
-
+          {formData.waterBillingType === 'PER_UNIT' ? (
             <Input
-              label="ค่าส่วนกลาง / ค่าขยะ (ถ้ามี)"
-              name="commonFee"
+              label="ราคาค่าน้ำต่อหน่วย"
+              name="defaultWaterRate"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="18.0"
+              value={formData.defaultWaterRate}
+              onChange={handleChange}
+              error={errors.defaultWaterRate}
+              unitSuffix="บาท/หน่วย"
+              required
+            />
+          ) : (
+            <Input
+              label="ราคาค่าน้ำเหมาจ่ายต่อเดือน"
+              name="flatWaterRate"
               type="number"
               min="0"
-              placeholder="0"
-              value={formData.commonFee}
+              placeholder="100"
+              value={formData.flatWaterRate}
               onChange={handleChange}
-              error={errors.commonFee}
+              error={errors.flatWaterRate}
               unitSuffix="บาท/เดือน"
+              required
             />
+          )}
+
+          {/* Fees: Common area fee, Trash fee, Other fee */}
+          <div className="pt-2 border-t border-slate-200">
+            <h5 className="font-bold text-slate-800 text-base mb-3">
+              💵 ค่าบริการและค่าธรรมเนียมส่วนกลาง (ค่าตั้งต้นของแต่ละห้อง)
+            </h5>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="ค่าส่วนกลาง"
+                name="commonFee"
+                type="number"
+                min="0"
+                placeholder="0"
+                value={formData.commonFee}
+                onChange={handleChange}
+                error={errors.commonFee}
+                unitSuffix="บาท/เดือน"
+              />
+
+              <Input
+                label="ค่าขยะ"
+                name="trashFee"
+                type="number"
+                min="0"
+                placeholder="0"
+                value={formData.trashFee}
+                onChange={handleChange}
+                error={errors.trashFee}
+                unitSuffix="บาท/เดือน"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+              <Input
+                label="ค่าใช้จ่ายอื่นๆ เริ่มต้น (ถ้ามี)"
+                name="defaultOtherFee"
+                type="number"
+                min="0"
+                placeholder="0"
+                value={formData.defaultOtherFee}
+                onChange={handleChange}
+                error={errors.defaultOtherFee}
+                unitSuffix="บาท/เดือน"
+              />
+
+              <Input
+                label="หมายเหตุสำหรับค่าใช้จ่ายอื่นๆ"
+                name="defaultOtherFeeNote"
+                placeholder="เช่น ค่าที่จอดรถ, ค่าเคเบิลทีวี"
+                value={formData.defaultOtherFeeNote}
+                onChange={handleChange}
+                error={errors.defaultOtherFeeNote}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Slip Template & PromptPay Section */}
+        <div className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-xl space-y-4">
+          <div className="flex items-center gap-2">
+            <QrCode className="w-5 h-5 text-indigo-700" />
+            <h4 className="font-bold text-indigo-950 text-lg">
+              📱 การชำระเงินและพร้อมเพย์ (QR PromptPay บนสลิป)
+            </h4>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="หมายเลขพร้อมเพย์ (PromptPay ID)"
+              name="promptPayNumber"
+              placeholder="เบอร์มือถือ 10 หลัก หรือ เลข ปชช. 13 หลัก"
+              value={formData.promptPayNumber}
+              onChange={handleChange}
+              error={errors.promptPayNumber}
+              helperText="ระบบจะสร้าง QR Code ให้ผู้เช่าสแกนจ่ายได้ทันที"
+            />
+
+            <Input
+              label="ชื่อบัญชีพร้อมเพย์ (แสดงบนสลิป)"
+              name="promptPayName"
+              placeholder="เช่น นาย สมศักดิ์ สุขใจ"
+              value={formData.promptPayName}
+              onChange={handleChange}
+              error={errors.promptPayName}
+            />
+          </div>
+
+          <div className="pt-2 border-t border-indigo-100">
+            <label className="block text-base font-semibold text-slate-800 mb-1.5 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-indigo-600" />
+              <span>เทมเพลตหมายเหตุบนสลิปของหอพัก (Remark Template)</span>
+            </label>
+            <textarea
+              name="remarkTemplate"
+              rows={2}
+              value={formData.remarkTemplate}
+              onChange={handleChange}
+              placeholder="ระบุข้อความหรือเงื่อนไขการชำระเงิน เช่น กรุณาชำระเงินก่อนวันที่ 5 ของทุกเดือน"
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600 transition-all"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              ข้อความนี้จะแสดงเป็นค่าเริ่มต้นในช่องหมายเหตุบนสลิปของทุกห้องพัก (สามารถปรับแก้รายห้องได้)
+            </p>
           </div>
         </div>
 

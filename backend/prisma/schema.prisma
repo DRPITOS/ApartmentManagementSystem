@@ -31,6 +31,12 @@ model Apartment {
   waterBillingType       String           @default("PER_UNIT") // PER_UNIT หรือ FLAT_RATE
   flatWaterRate          Float?           @default(100.0) // บาทต่อเดือนกรณีเหมาจ่าย
   commonFee              Float?           @default(0.0) // ค่าส่วนกลาง
+  trashFee               Float?           @default(0.0) // ค่าขยะ
+  defaultOtherFee        Float?           @default(0.0) // ค่าใช้จ่ายอื่นๆ เริ่มต้น
+  defaultOtherFeeNote    String?          // หมายเหตุค่าใช้จ่ายอื่นๆ เริ่มต้น
+  remarkTemplate         String?          // เทมเพลตหมายเหตุท้ายสลิปของหอพัก
+  promptPayNumber        String?          // หมายเลขพร้อมเพย์ (เบอร์โทร หรือ เลขบัตร ปชช/ผู้เสียภาษี)
+  promptPayName          String?          // ชื่อบัญชีพร้อมเพย์
   defaultInitialElectricity Float?         @default(0.0) // เลขมิเตอร์ไฟเริ่มต้นของห้องพักในหอนี้
   defaultInitialWater       Float?         @default(0.0) // เลขมิเตอร์น้ำเริ่มต้นของห้องพักในหอนี้
   createdAt              DateTime         @default(now())
@@ -98,13 +104,15 @@ model MeterReading {
 
   // ค่าเช่าและค่าใช้จ่ายอื่น
   baseRentPrice        Float     // ค่าเช่าห้องตามรอบบิลนี้
-  otherFees            Float     @default(0.0)
-  otherFeesNote        String?
+  commonFee            Float     @default(0.0) // ค่าส่วนกลาง
+  trashFee             Float     @default(0.0) // ค่าขยะ
+  otherFees            Float     @default(0.0) // ค่าใช้จ่ายอื่นๆ
+  otherFeesNote        String?   // หมายเหตุค่าใช้จ่ายอื่นๆ
   totalAmount          Float     // รวมยอดทั้งสิ้น
 
   status               String    @default("UNPAID") // UNPAID, PAID, CANCELLED
   paidAt               DateTime?
-  note                 String?
+  note                 String?   // หมายเหตุบนสลิป/บันทึกช่วยจำสำหรับห้องนี้
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   room                 Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
