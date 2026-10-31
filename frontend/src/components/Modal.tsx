@@ -41,9 +41,9 @@ export const Modal: React.FC<ModalProps> = ({
         onClick={onClose}
       />
 
-      <div className="flex min-h-full items-center justify-center p-3 sm:p-6 print:p-0 print:block">
+      <div className="flex min-h-full items-center justify-center p-2 sm:p-6 print:p-0 print:block">
         <div
-          className={`relative w-full ${maxWidth} transform overflow-hidden rounded-2xl bg-white p-5 sm:p-8 text-left shadow-2xl transition-all border border-slate-100 z-10 print:transform-none print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full print:rounded-none`}
+          className={`relative w-full ${maxWidth} transform overflow-hidden rounded-2xl bg-white p-3.5 sm:p-8 text-left shadow-2xl transition-all border border-slate-100 z-10 print:transform-none print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full print:rounded-none`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5 print:hidden">

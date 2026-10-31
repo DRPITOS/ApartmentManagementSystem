@@ -172,6 +172,13 @@ export const BillModal: React.FC<BillModalProps> = ({
   const [paymentRemarkInput, setPaymentRemarkInput] = useState<string>('');
   const [isSavingPayment, setIsSavingPayment] = useState(false);
 
+  // Responsive mobile viewport scaling state
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const billRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number>(1);
+  const [billHeight, setBillHeight] = useState<number>(0);
+  const [isMobileFit, setIsMobileFit] = useState<boolean>(true);
+
   // Meter reading date state (default today, adjustable by user)
   const [readingDate, setReadingDate] = useState<string>(() => {
     if (initialReading?.readingDate) {
@@ -282,6 +289,51 @@ export const BillModal: React.FC<BillModalProps> = ({
       isCancelled = true;
     };
   }, [promptPayNumber, reading, effectiveTotal]);
+
+  // Calculate scale on mobile view so 940px receipt fits the viewport without overflowing
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const calculateScale = () => {
+      if (!containerRef.current) return;
+      const containerWidth = containerRef.current.clientWidth;
+      const targetWidth = 940;
+
+      if (billRef.current) {
+        setBillHeight(billRef.current.offsetHeight);
+      }
+
+      if (isMobileFit && containerWidth < targetWidth && containerWidth > 0) {
+        const newScale = Math.min(1, containerWidth / targetWidth);
+        setScale(newScale);
+      } else {
+        setScale(1);
+      }
+    };
+
+    calculateScale();
+    const timer = setTimeout(calculateScale, 60);
+
+    const observer = new ResizeObserver(() => {
+      calculateScale();
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    if (billRef.current) {
+      observer.observe(billRef.current);
+    }
+
+    window.addEventListener('resize', calculateScale);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', calculateScale);
+    };
+  }, [isOpen, reading, isMobileFit]);
+
 
   if (!reading) return null;
 
@@ -415,6 +467,7 @@ export const BillModal: React.FC<BillModalProps> = ({
     clone.style.width = `${billWidth}px`;
     clone.style.minWidth = `${billWidth}px`;
     clone.style.maxWidth = `${billWidth}px`;
+    clone.style.transform = 'none';
     clone.style.backgroundColor = '#ffffff';
 
     // Remove any interactive or no-print buttons in the clone
@@ -607,13 +660,64 @@ export const BillModal: React.FC<BillModalProps> = ({
         </div>
       )}
 
-      {/* Outer Scroll Container for smaller screens */}
-      <div className="overflow-x-auto pb-2">
-        {/* Printable / Exportable Bill Area matching receipt_template.png */}
+      {/* Mobile Viewport Toggle (Visible only on mobile when bill would overflow) */}
+      {scale < 1 || !isMobileFit ? (
+        <div className="no-print flex items-center justify-between mb-2.5 px-1 text-xs sm:hidden">
+          <span className="text-slate-500 font-medium">
+            มุมมองบนมือถือ:
+          </span>
+          <div className="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setIsMobileFit(true)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                isMobileFit
+                  ? 'bg-white text-indigo-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              📱 พอดีหน้าจอ
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileFit(false)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                !isMobileFit
+                  ? 'bg-white text-indigo-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              🔍 ขนาดจริง (เลื่อนดู)
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Bill Outer Container with Dynamic Responsive Scaling in Mobile View */}
+      <div
+        ref={containerRef}
+        className={`w-full ${
+          isMobileFit && scale < 1 ? 'overflow-hidden flex justify-center' : 'overflow-x-auto'
+        } pb-2 print:overflow-visible print:!h-auto print:!w-full`}
+        style={{
+          height: isMobileFit && scale < 1 && billHeight > 0 ? `${Math.ceil(billHeight * scale)}px` : 'auto',
+        }}
+      >
         <div
-          id="printable-bill"
-          className="bg-white border-[3px] border-[#1a56db] p-6 sm:p-8 text-slate-800 print:p-4 print:border-[3px] print:border-[#1a56db] select-text relative w-[940px] min-w-[940px] max-w-[940px] mx-auto"
+          style={{
+            width: '940px',
+            transform: isMobileFit && scale < 1 ? `scale(${scale})` : undefined,
+            transformOrigin: 'top center',
+            flexShrink: 0,
+          }}
+          className="print:transform-none print:!w-full"
         >
+          {/* Printable / Exportable Bill Area matching receipt_template.png */}
+          <div
+            id="printable-bill"
+            ref={billRef}
+            className="bg-white border-[3px] border-[#1a56db] p-6 sm:p-8 text-slate-800 print:p-4 print:border-[3px] print:border-[#1a56db] select-text relative w-[940px] min-w-[940px] max-w-[940px] mx-auto"
+          >
           <div className="flex">
             {/* Left Vertical Room Label */}
             <div className="w-12 sm:w-14 flex-shrink-0 flex items-center justify-center -ml-3 sm:-ml-4 select-none">
@@ -893,6 +997,7 @@ export const BillModal: React.FC<BillModalProps> = ({
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
