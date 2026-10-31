@@ -500,15 +500,6 @@ export const MeterReadingPage: React.FC = () => {
         </div>
       )}
 
-      {/* Instructions for landlord */}
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 text-base flex items-start gap-3">
-        <Zap className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-        <div>
-          <strong className="block text-lg font-bold">✨ สะดวกขึ้น: กรอกเฉพาะ "เลขมิเตอร์ใหม่" ของเดือนนี้!</strong>
-          ระบบจะดึงเลขครั้งก่อนมาคำนวณให้อัตโนมัติ พร้อมดึงเทมเพลตค่าขยะ ส่วนกลาง ค่าอื่นๆ และหมายเหตุบนสลิปของหอพักมาให้ และสามารถปรับแก้รายห้องได้ทันที
-        </div>
-      </div>
-
       {/* Room Meter Cards */}
       {roomStates.length > 0 ? (
         <div className="space-y-4">
