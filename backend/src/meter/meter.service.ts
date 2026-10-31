@@ -478,6 +478,7 @@ export class MeterService {
       where: { id },
       data: {
         ...(dto.billingMonth && { billingMonth: dto.billingMonth }),
+        ...(dto.readingDate && { readingDate: new Date(dto.readingDate) }),
         previousElectricity: prevElec,
         currentElectricity: currElec,
         electricityUnits,
@@ -603,10 +604,13 @@ export class MeterService {
         },
       });
 
+      const readingDate = item.readingDate ? new Date(item.readingDate) : (dto.readingDate ? new Date(dto.readingDate) : new Date());
+
       if (existing) {
         const updated = await this.prisma.meterReading.update({
           where: { id: existing.id },
           data: {
+            readingDate,
             previousElectricity,
             currentElectricity: item.currentElectricity,
             electricityUnits,
@@ -632,6 +636,7 @@ export class MeterService {
           data: {
             roomId: item.roomId,
             billingMonth: dto.billingMonth,
+            readingDate,
             previousElectricity,
             currentElectricity: item.currentElectricity,
             electricityUnits,

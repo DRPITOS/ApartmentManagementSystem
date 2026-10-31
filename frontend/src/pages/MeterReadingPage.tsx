@@ -60,6 +60,10 @@ export const MeterReadingPage: React.FC = () => {
     );
   });
 
+  const [readingDate, setReadingDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
   const [roomStates, setRoomStates] = useState<RoomReadingState[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [globalMessage, setGlobalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -81,6 +85,15 @@ export const MeterReadingPage: React.FC = () => {
         `/meters/apartment/${selectedApartment.id}?month=${selectedMonth}`,
       );
       const monthlyItems: { room: any; reading: MeterReading | null }[] = monthlyRes.data.items;
+
+      if (monthlyItems.length > 0) {
+        const firstWithDate = monthlyItems.find((item) => item.reading?.readingDate);
+        if (firstWithDate?.reading?.readingDate) {
+          try {
+            setReadingDate(new Date(firstWithDate.reading.readingDate).toISOString().split('T')[0]);
+          } catch {}
+        }
+      }
 
       const states: RoomReadingState[] = [];
 
@@ -274,6 +287,7 @@ export const MeterReadingPage: React.FC = () => {
       const res = await api.post('/meters', {
         roomId: state.roomId,
         billingMonth: selectedMonth,
+        readingDate,
         previousElectricity: prevE,
         currentElectricity: currE,
         electricityRate: state.electricityRate,
@@ -359,8 +373,10 @@ export const MeterReadingPage: React.FC = () => {
       const batchPayload = {
         apartmentId: selectedApartment.id,
         billingMonth: selectedMonth,
+        readingDate,
         readings: roomStates.map((r) => ({
           roomId: r.roomId,
+          readingDate,
           previousElectricity: parseFloat(r.previousElectricity) || 0,
           currentElectricity: parseFloat(r.currentElectricity) || 0,
           previousWater: parseFloat(r.previousWater) || 0,
@@ -391,6 +407,7 @@ export const MeterReadingPage: React.FC = () => {
     if (!state.lastReading) return;
     setActiveBillReading({
       ...state.lastReading,
+      readingDate: readingDate ? new Date(readingDate).toISOString() : state.lastReading.readingDate,
       commonFee: (state.lastReading.commonFee && state.lastReading.commonFee > 0) ? state.lastReading.commonFee : (parseFloat(String(state.commonFee)) || selectedApartment?.commonFee || 0),
       trashFee: (state.lastReading.trashFee && state.lastReading.trashFee > 0) ? state.lastReading.trashFee : (parseFloat(String(state.trashFee)) || selectedApartment?.trashFee || 0),
       otherFees: state.lastReading.otherFees ?? (parseFloat(String(state.otherFees)) || 0),
@@ -468,6 +485,18 @@ export const MeterReadingPage: React.FC = () => {
               value={selectedMonth}
               onChange={handleMonthChange}
               className="flex-1 sm:flex-none min-w-0 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-base font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+          </div>
+
+          <div className="flex-1 sm:flex-none flex items-center gap-2 bg-slate-50 p-2 sm:p-3 rounded-2xl border border-slate-200">
+            <Calendar className="w-5 h-5 text-emerald-600 ml-1 shrink-0" />
+            <span className="text-base font-bold text-slate-700 shrink-0">จดวันที่:</span>
+            <input
+              type="date"
+              value={readingDate}
+              onChange={(e) => setReadingDate(e.target.value)}
+              className="flex-1 sm:flex-none min-w-0 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-base font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              title="วันที่จดมิเตอร์ (ค่าเริ่มต้นคือวันนี้ สามารถปรับเปลี่ยนได้ตามต้องการ)"
             />
           </div>
 

@@ -12,6 +12,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Calendar,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -140,6 +141,16 @@ export const BillModal: React.FC<BillModalProps> = ({
   const [promptPayName, setPromptPayName] = useState('');
   const [isSavingPromptPay, setIsSavingPromptPay] = useState(false);
 
+  // Meter reading date state (default today, adjustable by user)
+  const [readingDate, setReadingDate] = useState<string>(() => {
+    if (initialReading?.readingDate) {
+      try {
+        return new Date(initialReading.readingDate).toISOString().split('T')[0];
+      } catch {}
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+
   const room = reading?.room || propRoom;
   const apt = room?.apartment || propApartment;
 
@@ -147,6 +158,13 @@ export const BillModal: React.FC<BillModalProps> = ({
   useEffect(() => {
     setReading(initialReading);
     if (initialReading) {
+      if (initialReading.readingDate) {
+        try {
+          setReadingDate(new Date(initialReading.readingDate).toISOString().split('T')[0]);
+        } catch {}
+      } else {
+        setReadingDate(new Date().toISOString().split('T')[0]);
+      }
       const defaultNote =
         initialReading.note !== undefined && initialReading.note !== null
           ? initialReading.note
@@ -240,6 +258,19 @@ export const BillModal: React.FC<BillModalProps> = ({
     }
   };
 
+  const handleUpdateReadingDate = async (newDateStr: string) => {
+    setReadingDate(newDateStr);
+    if (!reading) return;
+    try {
+      await api.put(`/meters/${reading.id}`, {
+        readingDate: newDateStr,
+      });
+      setReading((prev) => (prev ? { ...prev, readingDate: new Date(newDateStr).toISOString() } : null));
+    } catch (err) {
+      console.error('Failed to update reading date:', err);
+    }
+  };
+
   const handleSavePromptPay = async () => {
     const aptId = apt?.id || reading.room?.apartmentId;
     if (!aptId) {
@@ -276,16 +307,16 @@ export const BillModal: React.FC<BillModalProps> = ({
     exportContainer.style.position = 'fixed';
     exportContainer.style.left = '-9999px';
     exportContainer.style.top = '0';
-    exportContainer.style.width = '740px';
-    exportContainer.style.minWidth = '740px';
-    exportContainer.style.maxWidth = '740px';
+    exportContainer.style.width = '820px';
+    exportContainer.style.minWidth = '820px';
+    exportContainer.style.maxWidth = '820px';
     exportContainer.style.zIndex = '-9999';
     exportContainer.style.backgroundColor = '#ffffff';
 
     const clone = billElement.cloneNode(true) as HTMLElement;
-    clone.style.width = '740px';
-    clone.style.minWidth = '740px';
-    clone.style.maxWidth = '740px';
+    clone.style.width = '820px';
+    clone.style.minWidth = '820px';
+    clone.style.maxWidth = '820px';
     clone.style.backgroundColor = '#ffffff';
 
     // Remove any interactive or no-print buttons in the clone
@@ -385,7 +416,7 @@ export const BillModal: React.FC<BillModalProps> = ({
   };
 
   const displayNote = noteText || reading.note || apt?.remarkTemplate || '';
-  const thaiReadingDate = formatThaiFullDate(reading.readingDate);
+  const thaiReadingDate = formatThaiFullDate(readingDate || reading.readingDate);
   const thaiDueDate = formatThaiDueDate(reading.billingMonth);
 
   return (
@@ -393,14 +424,14 @@ export const BillModal: React.FC<BillModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`ใบเรียกเก็บเงิน - ห้อง ${roomNum}`}
-      maxWidth="max-w-3xl"
+      maxWidth="max-w-4xl"
     >
       {/* Outer Scroll Container for smaller screens */}
       <div className="overflow-x-auto pb-2">
         {/* Printable / Exportable Bill Area matching receipt_template.png */}
         <div
           id="printable-bill"
-          className="bg-white border-[3px] border-[#1a56db] p-5 sm:p-7 text-slate-800 print:p-4 print:border-[3px] print:border-[#1a56db] select-text relative min-w-[650px] max-w-[740px] mx-auto"
+          className="bg-white border-[3px] border-[#1a56db] p-5 sm:p-7 text-slate-800 print:p-4 print:border-[3px] print:border-[#1a56db] select-text relative min-w-[780px] max-w-[820px] mx-auto"
         >
           <div className="flex">
             {/* Left Vertical Room Label */}
@@ -512,41 +543,16 @@ export const BillModal: React.FC<BillModalProps> = ({
                   </div>
                 </div>
 
-                {/* ค่าเช่าห้อง */}
-                {reading.baseRentPrice > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center justify-between w-48 sm:w-56">
-                      <span className="font-medium text-slate-800">ค่าเช่าห้อง</span>
-                      <span className="font-semibold text-slate-900 text-right">
-                        {reading.baseRentPrice.toLocaleString('th-TH', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{' '}
-                        บาท
-                      </span>
-                    </div>
-                    <div className="text-right text-slate-700 font-medium">
-                      (ค่าน้ำหน่วยละ{' '}
-                      <span className="font-bold text-slate-900 mx-1">
-                        {reading.waterRate}
-                      </span>{' '}
-                      บาท)
-                    </div>
+                {/* อัตราค่าน้ำต่อหน่วย (ไม่แสดงบรรทัดค่าเช่าห้องในใบเสร็จ) */}
+                <div className="flex items-center justify-end">
+                  <div className="text-right text-slate-700 font-medium">
+                    (ค่าน้ำหน่วยละ{' '}
+                    <span className="font-bold text-slate-900 mx-1">
+                      {reading.waterRate}
+                    </span>{' '}
+                    บาท)
                   </div>
-                )}
-
-                {/* If no baseRentPrice, still show water rate */}
-                {reading.baseRentPrice <= 0 && (
-                  <div className="flex items-center justify-end">
-                    <div className="text-right text-slate-700 font-medium">
-                      (ค่าน้ำหน่วยละ{' '}
-                      <span className="font-bold text-slate-900 mx-1">
-                        {reading.waterRate}
-                      </span>{' '}
-                      บาท)
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 {/* ค่าใช้จ่ายอื่นๆ / หมายเหตุพิเศษ (ตัวหนังสือสีแดงตาม template) */}
                 {effectiveOtherFees > 0 && (
@@ -583,8 +589,8 @@ export const BillModal: React.FC<BillModalProps> = ({
                 </div>
 
                 {effectiveCommonFee > 0 && (
-                  <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base font-semibold text-slate-800">
-                    <span>ค่ารักษามิเตอร์น้ำ+ไฟ+ไฟส่วนกลาง</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base font-semibold text-slate-800 whitespace-nowrap">
+                    <span className="whitespace-nowrap">ค่ารักษามิเตอร์น้ำ+ไฟ+ไฟส่วนกลาง</span>
                     <span className="font-bold text-slate-900 text-sm sm:text-lg">
                       {effectiveCommonFee.toLocaleString('th-TH', {
                         minimumFractionDigits: 2,
@@ -698,6 +704,19 @@ export const BillModal: React.FC<BillModalProps> = ({
                 รอชำระเงิน
               </span>
             )}
+          </div>
+
+          {/* Quick Date Adjustment */}
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg">
+            <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="text-xs font-bold text-slate-700 whitespace-nowrap">จดวันที่:</span>
+            <input
+              type="date"
+              value={readingDate}
+              onChange={(e) => handleUpdateReadingDate(e.target.value)}
+              className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+              title="ปรับเปลี่ยนวันที่จดมิเตอร์บนบิลนี้ (บันทึกอัตโนมัติ)"
+            />
           </div>
 
           <div className="flex items-center gap-2">

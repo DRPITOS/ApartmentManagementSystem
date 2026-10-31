@@ -57,6 +57,10 @@ export class BatchSingleReadingItem {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsString()
+  readingDate?: string;
 }
 
 export class BatchMeterReadingDto {
@@ -67,6 +71,10 @@ export class BatchMeterReadingDto {
   @IsString({ message: 'รอบบิลต้องเป็นข้อความ เช่น 2026-10' })
   @IsNotEmpty({ message: 'กรุณาระบุรอบบิล' })
   billingMonth!: string;
+
+  @IsOptional()
+  @IsString()
+  readingDate?: string;
 
   @IsArray({ message: 'รายการจดมิเตอร์ต้องเป็นอาเรย์' })
   @ValidateNested({ each: true })
