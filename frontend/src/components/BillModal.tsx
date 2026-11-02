@@ -242,12 +242,12 @@ export const BillModal: React.FC<BillModalProps> = ({
   const defaultTrashFee = apt?.trashFee ?? 0;
 
   const effectiveCommonFee =
-    reading?.commonFee !== undefined && reading?.commonFee !== null && Number(reading.commonFee) > 0
+    reading?.commonFee !== undefined && reading?.commonFee !== null
       ? Number(reading.commonFee)
       : Number(defaultCommonFee) || 0;
 
   const effectiveTrashFee =
-    reading?.trashFee !== undefined && reading?.trashFee !== null && Number(reading.trashFee) > 0
+    reading?.trashFee !== undefined && reading?.trashFee !== null
       ? Number(reading.trashFee)
       : Number(defaultTrashFee) || 0;
 

@@ -90,17 +90,17 @@ export class MeterService {
 
     // ค่าเช่าห้องฐาน
     const baseRentPrice = dto.baseRentPrice ?? room.basePrice;
-    const commonFee = (dto.commonFee !== undefined && dto.commonFee > 0)
+    const commonFee = (dto.commonFee !== undefined && dto.commonFee !== null)
       ? dto.commonFee
-      : (room.apartment.commonFee || 0);
+      : (room.apartment.commonFee ?? 0);
 
-    const trashFee = (dto.trashFee !== undefined && dto.trashFee > 0)
+    const trashFee = (dto.trashFee !== undefined && dto.trashFee !== null)
       ? dto.trashFee
-      : (room.apartment.trashFee || 0);
+      : (room.apartment.trashFee ?? 0);
 
-    const otherFees = (dto.otherFees !== undefined && dto.otherFees > 0)
+    const otherFees = (dto.otherFees !== undefined && dto.otherFees !== null)
       ? dto.otherFees
-      : (room.apartment.defaultOtherFee || 0);
+      : (room.apartment.defaultOtherFee ?? 0);
 
     const otherFeesNote = dto.otherFeesNote !== undefined
       ? dto.otherFeesNote
@@ -315,15 +315,15 @@ export class MeterService {
         const aptOtherNote = room.apartment?.defaultOtherFeeNote ?? apartment.defaultOtherFeeNote ?? null;
         const aptRemarkTemplate = room.apartment?.remarkTemplate ?? apartment.remarkTemplate ?? null;
 
-        const effectiveCommonFee = (currentMonthReading.commonFee && currentMonthReading.commonFee > 0)
+        const effectiveCommonFee = (currentMonthReading.commonFee !== undefined && currentMonthReading.commonFee !== null)
           ? currentMonthReading.commonFee
           : aptCommonFee;
 
-        const effectiveTrashFee = (currentMonthReading.trashFee && currentMonthReading.trashFee > 0)
+        const effectiveTrashFee = (currentMonthReading.trashFee !== undefined && currentMonthReading.trashFee !== null)
           ? currentMonthReading.trashFee
           : aptTrashFee;
 
-        const effectiveOtherFees = (currentMonthReading.otherFees && currentMonthReading.otherFees > 0)
+        const effectiveOtherFees = (currentMonthReading.otherFees !== undefined && currentMonthReading.otherFees !== null)
           ? currentMonthReading.otherFees
           : aptOtherFee;
 
@@ -419,17 +419,17 @@ export class MeterService {
     await this.apartmentService.validateOwnership(reading.room.apartmentId, ownerId);
 
     const apt = reading.room.apartment;
-    const effectiveCommonFee = (reading.commonFee && reading.commonFee > 0)
+    const effectiveCommonFee = (reading.commonFee !== undefined && reading.commonFee !== null)
       ? reading.commonFee
-      : (apt.commonFee || 0);
+      : (apt.commonFee ?? 0);
 
-    const effectiveTrashFee = (reading.trashFee && reading.trashFee > 0)
+    const effectiveTrashFee = (reading.trashFee !== undefined && reading.trashFee !== null)
       ? reading.trashFee
-      : (apt.trashFee || 0);
+      : (apt.trashFee ?? 0);
 
-    const effectiveOtherFees = (reading.otherFees && reading.otherFees > 0)
+    const effectiveOtherFees = (reading.otherFees !== undefined && reading.otherFees !== null)
       ? reading.otherFees
-      : (apt.defaultOtherFee || 0);
+      : (apt.defaultOtherFee ?? 0);
 
     const effectiveTotal = Math.round((
       reading.baseRentPrice +
@@ -673,17 +673,17 @@ export class MeterService {
       }
 
       const baseRentPrice = item.baseRentPrice ?? room.basePrice;
-      const commonFee = (item.commonFee !== undefined && item.commonFee > 0)
+      const commonFee = (item.commonFee !== undefined && item.commonFee !== null)
         ? item.commonFee
-        : (apartment.commonFee || 0);
+        : (apartment.commonFee ?? 0);
 
-      const trashFee = (item.trashFee !== undefined && item.trashFee > 0)
+      const trashFee = (item.trashFee !== undefined && item.trashFee !== null)
         ? item.trashFee
-        : (apartment.trashFee || 0);
+        : (apartment.trashFee ?? 0);
 
-      const otherFees = (item.otherFees !== undefined && item.otherFees > 0)
+      const otherFees = (item.otherFees !== undefined && item.otherFees !== null)
         ? item.otherFees
-        : (apartment.defaultOtherFee || 0);
+        : (apartment.defaultOtherFee ?? 0);
 
       const otherFeesNote = item.otherFeesNote !== undefined
         ? item.otherFeesNote
