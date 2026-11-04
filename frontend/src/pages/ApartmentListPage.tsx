@@ -546,10 +546,9 @@ export const ApartmentListPage: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                 <Input
-                  label="ค่าใช้จ่ายอื่นๆ เริ่มต้น"
+                  label="ค่าใช้จ่ายอื่นๆ เริ่มต้น (ใส่ติดลบเป็นส่วนลดได้)"
                   type="number"
                   step="0.01"
-                  min="0"
                   value={editForm.defaultOtherFee}
                   onChange={(e) => setEditForm((p) => ({ ...p, defaultOtherFee: e.target.value }))}
                   unitSuffix="บาท/เดือน"

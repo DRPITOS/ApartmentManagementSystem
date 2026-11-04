@@ -47,7 +47,6 @@ export class BatchSingleReadingItem {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(0)
   otherFees?: number;
 
   @IsOptional()

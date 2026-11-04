@@ -467,9 +467,9 @@ export const DashboardPage: React.FC = () => {
                             <span className="text-base font-black text-indigo-950">
                               ฿{reading.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                             </span>
-                            {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees > 0) && (
+                            {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees !== 0) && (
                               <span className="text-[10px] text-slate-400">
-                                (รวมค่าบริการ)
+                                {reading.otherFees < 0 ? "(มีส่วนลด)" : "(รวมค่าบริการ)"}
                               </span>
                             )}
                           </div>
@@ -568,9 +568,9 @@ export const DashboardPage: React.FC = () => {
                         {isRecorded ? (
                           <div>
                             <div>฿{reading.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</div>
-                            {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees > 0) && (
+                            {(reading.commonFee > 0 || reading.trashFee > 0 || reading.otherFees !== 0) && (
                               <div className="text-xs text-slate-400 font-normal">
-                                รวมค่าบริการเพิ่มเติม
+                                {reading.otherFees < 0 ? "มีส่วนลด / ค่าบริการ" : "รวมค่าบริการเพิ่มเติม"}
                               </div>
                             )}
                           </div>

@@ -58,7 +58,6 @@ export const apartmentSchema = z.object({
     .optional(),
   defaultOtherFee: z
     .number({ message: 'ค่าใช้จ่ายอื่นๆ ต้องเป็นตัวเลข' })
-    .min(0, 'ค่าใช้จ่ายอื่นๆ ต้องไม่ติดลบ')
     .optional(),
   defaultOtherFeeNote: z.string().optional(),
   remarkTemplate: z.string().optional(),
@@ -114,7 +113,7 @@ export const meterReadingSchema = z.object({
   baseRentPrice: z.number().min(0, 'ค่าเช่าห้องต้องไม่ติดลบ').optional(),
   commonFee: z.number().min(0, 'ค่าส่วนกลางต้องไม่ติดลบ').optional(),
   trashFee: z.number().min(0, 'ค่าขยะต้องไม่ติดลบ').optional(),
-  otherFees: z.number().min(0, 'ค่าใช้จ่ายอื่นต้องไม่ติดลบ').optional(),
+  otherFees: z.number().optional(),
   otherFeesNote: z.string().optional(),
   note: z.string().optional(),
 }).refine((data) => data.previousElectricity === undefined || data.currentElectricity >= data.previousElectricity, {

@@ -260,11 +260,10 @@ export const CreateApartmentModal: React.FC<CreateApartmentModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
               <Input
-                label="ค่าใช้จ่ายอื่นๆ เริ่มต้น (ถ้ามี)"
+                label="ค่าใช้จ่ายอื่นๆ เริ่มต้น (ใส่ติดลบเป็นส่วนลดได้)"
                 name="defaultOtherFee"
                 type="number"
                 step="0.01"
-                min="0"
                 placeholder="0"
                 value={formData.defaultOtherFee}
                 onChange={handleChange}

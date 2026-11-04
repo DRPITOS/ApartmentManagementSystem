@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Zap,
+  RefreshCw,
+  RotateCcw,
   Droplets,
   CheckCircle,
   Save,
@@ -20,6 +22,10 @@ import { MeterReadingSkeleton } from '../components/Skeleton.js';
 import { BillModal } from '../components/BillModal.js';
 
 interface RoomReadingState {
+  isResetElec?: boolean;
+  originalPreviousElectricity?: string;
+  isResetWater?: boolean;
+  originalPreviousWater?: string;
   roomId: string;
   roomNumber: string;
   floor: number | null;
@@ -210,6 +216,35 @@ export const MeterReadingPage: React.FC = () => {
     );
   };
 
+  const toggleResetMeter = (roomId: string, type: 'electricity' | 'water') => {
+    setRoomStates((prev) =>
+      prev.map((r) => {
+        if (r.roomId !== roomId) return r;
+        if (type === 'electricity') {
+          const nextState = !r.isResetElec;
+          return {
+            ...r,
+            isResetElec: nextState,
+            originalPreviousElectricity: r.originalPreviousElectricity ?? r.previousElectricity,
+            previousElectricity: nextState ? '0' : (r.originalPreviousElectricity ?? r.previousElectricity),
+            isSaved: false,
+            error: null,
+          };
+        } else {
+          const nextState = !r.isResetWater;
+          return {
+            ...r,
+            isResetWater: nextState,
+            originalPreviousWater: r.originalPreviousWater ?? r.previousWater,
+            previousWater: nextState ? '0' : (r.originalPreviousWater ?? r.previousWater),
+            isSaved: false,
+            error: null,
+          };
+        }
+      }),
+    );
+  };
+
   const toggleFeesExpanded = (roomId: string) => {
     setExpandedFeesRoomIds((prev) => ({
       ...prev,
@@ -241,7 +276,7 @@ export const MeterReadingPage: React.FC = () => {
     const commonFee = parseFloat(String(state.commonFee)) || 0;
     const trashFee = parseFloat(String(state.trashFee)) || 0;
     const otherFees = parseFloat(String(state.otherFees)) || 0;
-    const total = Math.round((basePrice + eCost + wCost + commonFee + trashFee + otherFees) * 100) / 100;
+    const total = Math.max(0, Math.round((basePrice + eCost + wCost + commonFee + trashFee + otherFees) * 100) / 100);
 
     return { eUnits, eCost, wUnits, wCost, basePrice, commonFee, trashFee, otherFees, total, hasCurrE, hasCurrW };
   };
@@ -300,7 +335,7 @@ export const MeterReadingPage: React.FC = () => {
         baseRentPrice: baseP,
         commonFee: parseFloat(String(state.commonFee)) || 0,
         trashFee: parseFloat(String(state.trashFee)) || 0,
-        otherFees: parseFloat(String(state.otherFees)) || 0,
+        otherFees: !isNaN(parseFloat(String(state.otherFees))) ? parseFloat(String(state.otherFees)) : 0,
         otherFeesNote: state.otherFeesNote.trim() || undefined,
         note: state.slipNote.trim() || undefined,
       });
@@ -387,7 +422,7 @@ export const MeterReadingPage: React.FC = () => {
           baseRentPrice: parseFloat(String(r.basePrice)) || 0,
           commonFee: parseFloat(String(r.commonFee)) || 0,
           trashFee: parseFloat(String(r.trashFee)) || 0,
-          otherFees: parseFloat(String(r.otherFees)) || 0,
+          otherFees: !isNaN(parseFloat(String(r.otherFees))) ? parseFloat(String(r.otherFees)) : 0,
           otherFeesNote: r.otherFeesNote.trim() || undefined,
           note: r.slipNote.trim() || undefined,
         })),
@@ -642,15 +677,63 @@ export const MeterReadingPage: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 items-end">
-                      {/* Previous number from database (Read-only reference) */}
+                      {/* Previous number */}
                       <div>
-                        <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                          เลขครั้งก่อน (ในระบบ)
-                        </span>
-                        <div className="bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-600 flex items-center justify-between">
-                          <span>{state.previousElectricity}</span>
-                          <span className="text-xs text-slate-600">หน่วย</span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            {state.isResetElec ? 'เลขมิเตอร์ใหม่ (ตั้งต้น)' : 'เลขครั้งก่อน (ในระบบ)'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleResetMeter(state.roomId, 'electricity')}
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md transition-colors ${
+                              state.isResetElec
+                                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                                : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                            }`}
+                            title={state.isResetElec ? 'ยกเลิกการรีเซ็ต และใช้เลขครั้งก่อนเดิม' : 'คลิกเพื่อรีเซ็ตเลขมิเตอร์ กรณีเปลี่ยนมิเตอร์ใหม่'}
+                          >
+                            {state.isResetElec ? (
+                              <>
+                                <RotateCcw className="w-3 h-3" />
+                                <span>ยกเลิก</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3 h-3" />
+                                <span>เปลี่ยนมิเตอร์/รีเซ็ต</span>
+                              </>
+                            )}
+                          </button>
                         </div>
+
+                        {state.isResetElec ? (
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0"
+                              value={state.previousElectricity}
+                              onChange={(e) =>
+                                handleInputChange(state.roomId, 'previousElectricity', e.target.value)
+                              }
+                              className="w-full bg-white border-2 border-amber-500 rounded-xl px-3 py-2 text-base sm:text-lg font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleInputChange(state.roomId, 'previousElectricity', '0')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded"
+                            >
+                              = 0
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-600 flex items-center justify-between">
+                            <span>{state.previousElectricity}</span>
+                            <span className="text-xs text-slate-600">หน่วย</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Current number input */}
@@ -661,8 +744,8 @@ export const MeterReadingPage: React.FC = () => {
                         <input
                           type="number"
                           step="0.01"
-                          min={state.previousElectricity}
-                          placeholder={`≥ ${state.previousElectricity}`}
+                          min={parseFloat(state.previousElectricity) || 0}
+                          placeholder={`≥ ${state.previousElectricity || 0}`}
                           value={state.currentElectricity}
                           onChange={(e) =>
                             handleInputChange(state.roomId, 'currentElectricity', e.target.value)
@@ -698,15 +781,63 @@ export const MeterReadingPage: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 items-end">
-                      {/* Previous number from database (Read-only reference) */}
+                      {/* Previous number */}
                       <div>
-                        <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                          เลขครั้งก่อน (ในระบบ)
-                        </span>
-                        <div className="bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-600 flex items-center justify-between">
-                          <span>{state.previousWater}</span>
-                          <span className="text-xs text-slate-600">หน่วย</span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            {state.isResetWater ? 'เลขมิเตอร์ใหม่ (ตั้งต้น)' : 'เลขครั้งก่อน (ในระบบ)'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleResetMeter(state.roomId, 'water')}
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md transition-colors ${
+                              state.isResetWater
+                                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                                : 'bg-sky-100 text-sky-800 hover:bg-sky-200'
+                            }`}
+                            title={state.isResetWater ? 'ยกเลิกการรีเซ็ต และใช้เลขครั้งก่อนเดิม' : 'คลิกเพื่อรีเซ็ตเลขมิเตอร์ กรณีเปลี่ยนมิเตอร์ใหม่'}
+                          >
+                            {state.isResetWater ? (
+                              <>
+                                <RotateCcw className="w-3 h-3" />
+                                <span>ยกเลิก</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3 h-3" />
+                                <span>เปลี่ยนมิเตอร์/รีเซ็ต</span>
+                              </>
+                            )}
+                          </button>
                         </div>
+
+                        {state.isResetWater ? (
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0"
+                              value={state.previousWater}
+                              onChange={(e) =>
+                                handleInputChange(state.roomId, 'previousWater', e.target.value)
+                              }
+                              className="w-full bg-white border-2 border-sky-500 rounded-xl px-3 py-2 text-base sm:text-lg font-bold text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleInputChange(state.roomId, 'previousWater', '0')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-2 py-0.5 rounded"
+                            >
+                              = 0
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-600 flex items-center justify-between">
+                            <span>{state.previousWater}</span>
+                            <span className="text-xs text-slate-600">หน่วย</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Current number input */}
@@ -717,8 +848,8 @@ export const MeterReadingPage: React.FC = () => {
                         <input
                           type="number"
                           step="0.01"
-                          min={state.previousWater}
-                          placeholder={`≥ ${state.previousWater}`}
+                          min={parseFloat(state.previousWater) || 0}
+                          placeholder={`≥ ${state.previousWater || 0}`}
                           value={state.currentWater}
                           onChange={(e) =>
                             handleInputChange(state.roomId, 'currentWater', e.target.value)
@@ -758,7 +889,7 @@ export const MeterReadingPage: React.FC = () => {
                       <span>
                         ค่าขยะ, ส่วนกลาง, ค่าใช้จ่ายอื่นๆ และหมายเหตุบนสลิป
                       </span>
-                      {(commonFee > 0 || trashFee > 0 || otherFees > 0 || state.slipNote) && (
+                      {(commonFee > 0 || trashFee > 0 || otherFees !== 0 || state.slipNote) && (
                         <span className="text-xs font-semibold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
                           มีรายการเพิ่มเติม
                         </span>

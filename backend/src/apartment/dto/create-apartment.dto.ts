@@ -49,7 +49,6 @@ export class CreateApartmentDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'ค่าใช้จ่ายอื่นๆ เริ่มต้นต้องเป็นตัวเลข' })
-  @Min(0, { message: 'ค่าใช้จ่ายอื่นๆ เริ่มต้นต้องไม่ติดลบ' })
   defaultOtherFee?: number;
 
   @IsOptional()

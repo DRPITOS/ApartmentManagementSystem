@@ -255,12 +255,18 @@ export const BillModal: React.FC<BillModalProps> = ({
   const effectiveOtherFeesNote = reading?.otherFeesNote || apt?.defaultOtherFeeNote || '';
 
   const effectiveTotal = reading
-    ? Number(reading.baseRentPrice || 0) +
-      Number(reading.electricityCost || 0) +
-      Number(reading.waterCost || 0) +
-      effectiveCommonFee +
-      effectiveTrashFee +
-      effectiveOtherFees
+    ? Math.max(
+        0,
+        Math.round(
+          (Number(reading.baseRentPrice || 0) +
+            Number(reading.electricityCost || 0) +
+            Number(reading.waterCost || 0) +
+            effectiveCommonFee +
+            effectiveTrashFee +
+            effectiveOtherFees) *
+            100,
+        ) / 100,
+      )
     : 0;
 
   // Generate QR Code when reading or promptPayNumber changes
@@ -839,17 +845,22 @@ export const BillModal: React.FC<BillModalProps> = ({
                   </div>
                 </div>
 
-                {/* ค่าใช้จ่ายอื่นๆ / หมายเหตุพิเศษ (ตัวหนังสือสีแดงตาม template) */}
-                {effectiveOtherFees > 0 && (
-                  <div className="flex items-start justify-between text-red-600 font-semibold pt-1">
+                {/* ค่าใช้จ่ายอื่นๆ / ส่วนลด */}
+                {effectiveOtherFees !== 0 && (
+                  <div
+                    className={`flex items-start justify-between font-semibold pt-1 ${
+                      effectiveOtherFees < 0 ? "text-emerald-700" : "text-red-600"
+                    }`}
+                  >
                     <div className="whitespace-pre-wrap leading-relaxed max-w-[420px]">
-                      {effectiveOtherFeesNote || 'ค่าใช้จ่ายอื่นๆ'}
+                      {effectiveOtherFeesNote || (effectiveOtherFees < 0 ? "ส่วนลด" : "ค่าใช้จ่ายอื่นๆ")}
                     </div>
                     <div className="text-right font-bold">
-                      {effectiveOtherFees.toLocaleString('th-TH', {
+                      {effectiveOtherFees < 0 ? "-" : ""}
+                      {Math.abs(effectiveOtherFees).toLocaleString("th-TH", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      })}{' '}
+                      })}{" "}
                       บาท
                     </div>
                   </div>

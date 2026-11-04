@@ -110,7 +110,7 @@ export class MeterService {
       ? dto.note
       : (room.apartment.remarkTemplate || null);
 
-    const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
+    const totalAmount = Math.max(0, Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100);
 
     // ตรวจสอบว่าเคยมีบันทึกของเดือนนี้หรือยัง หากมีให้ update หากไม่มีให้ create
     const existing = await this.prisma.meterReading.findFirst({
@@ -568,7 +568,7 @@ export class MeterService {
     const commonFee = dto.commonFee !== undefined ? dto.commonFee : reading.commonFee;
     const trashFee = dto.trashFee !== undefined ? dto.trashFee : reading.trashFee;
     const otherFees = dto.otherFees !== undefined ? dto.otherFees : reading.otherFees;
-    const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
+    const totalAmount = Math.max(0, Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100);
 
     return this.prisma.meterReading.update({
       where: { id },
@@ -693,7 +693,7 @@ export class MeterService {
         ? item.note
         : (apartment.remarkTemplate || null);
 
-      const totalAmount = Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100;
+      const totalAmount = Math.max(0, Math.round((baseRentPrice + electricityCost + waterCost + commonFee + trashFee + otherFees) * 100) / 100);
 
       const existing = await this.prisma.meterReading.findFirst({
         where: {
